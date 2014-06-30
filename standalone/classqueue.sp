@@ -46,6 +46,7 @@ public OnPluginStart() {
     // TODO Register a console command to open up a custom menu.
     
 	HookEvent("player_spawn", Event_PlayerSpawn);
+    HookEvent("player_changeclass", Event_PlayerClass);
 }
 
 public PanelHandler1(Handle:menu, MenuAction:action, client, selection) {
@@ -94,4 +95,8 @@ public Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast) 
     
     // Set next class as current class, meaning there's no class to switch to.
     g_iClientNextClass[iClient] = iClass;
+}
+
+public Event_PlayerClass(Handle:event, const String:name[], bool:dontBroadcast) {
+    // TODO Implementation
 }
