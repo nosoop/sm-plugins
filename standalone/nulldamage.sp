@@ -5,12 +5,11 @@
 #include <sdkhooks>
 
 // Global definitions
-#define PLUGIN_VERSION "1.0.0"
+#define PLUGIN_VERSION "1.1.0"
 
 // Boolean arrays to determine which clients do 0.01 damage and take 9999.0 damage.
 new bool:g_bClientNullDamage[MAXPLAYERS+1] = {false, ... };
 new bool:g_bClientMassiveDamage[MAXPLAYERS+1] = {false, ... };
-
 
 // Plugin information
 public Plugin:myinfo =
@@ -30,10 +29,7 @@ public OnPluginStart() {
     RegAdminCmd("sm_null", Command_Nullify, ADMFLAG_SLAY, "Prevents a client from dealing damage.");
     RegAdminCmd("sm_rekt", Command_Rektify, ADMFLAG_SLAY, "Toggles whether all damage on a client does 999 damage.");
     RegAdminCmd("sm_nullrekt_list", Command_NullifyList, ADMFLAG_SLAY, "List clients that take massive damage.");
-    
-    //RegAdminCmd("sm_nullify", Command_Nullify, ADMFLAG_SLAY, "Prevents a client from dealing damage.");
-    //RegAdminCmd("sm_nullify_list", Command_NullifyList, ADMFLAG_SLAY, "List clients that do no damage.");
-    //RegAdminCmd("sm_null_list", Command_NullifyList, ADMFLAG_SLAY, "List clients that have damage disabled.");
+    RegAdminCmd("sm_nullrekt_reset", Command_Reset, ADMFLAG_SLAY, "Resets state of the plugin so everything does normal damage.");
     
     // Hook from all running clients.
     for (new i = 1; i <= MaxClients; i++) {
@@ -65,11 +61,14 @@ public Action:Command_Nullify(client, args) {
     GetCmdArg(1, arg1, sizeof(arg1));
  
     // Attempt to find a matching player.
+    // TODO Implement handling for @all, etc. even though we should really only be targeting one player.
     new target = FindTarget(client, arg1);
     if (target == -1) {
         // FindTarget() automatically replies with the failure reason.
         return Plugin_Handled;
     }
+    
+    // TODO Implement boolean argument to force enable/disable.
 
     // Allocate memory to hold the name.
     new String:name[MAX_NAME_LENGTH];
@@ -82,6 +81,7 @@ public Action:Command_Nullify(client, args) {
     new String:message[80];
     
     // Toggle nullified damage on a client, displaying a message to admins with the slay flag.
+    // Not using default notification method to disregard notification flags.
     if (!g_bClientNullDamage[target]) {
         g_bClientNullDamage[target] = true;
         Format(message, sizeof(message), "[SM] %s: Made %s deal almost-zero damage.", clientName, name);
@@ -92,6 +92,28 @@ public Action:Command_Nullify(client, args) {
         PrintToAdmins(message, "f");
     }
 
+    return Plugin_Handled;
+}
+
+public Action:Command_Reset(client, args) {
+    for (new i = 1; i <= MaxClients; i++) {
+        if (IsClientInGame(i) && !IsClientReplay(i) && !IsClientSourceTV(i)) {
+            g_bClientNullDamage[i] = false;
+            g_bClientMassiveDamage[i] = false;
+        }
+    }
+
+    // Allocate memory for name of client performing action.
+    new String:clientName[MAX_NAME_LENGTH];
+    GetClientName(client, clientName, sizeof(clientName));
+    
+    // Allocate space for message.
+    new String:message[96];
+
+    // Notify all admins with slay flag of reset.
+    Format(message, sizeof(message), "[SM] %s: Reset nullified / rekt status on all players.", clientName, name);
+    PrintToAdmins(message, "f");
+    
     return Plugin_Handled;
 }
 
@@ -123,7 +145,7 @@ public Action:Command_Rektify(client, args) {
     
     new String:message[80];
     
-    // Toggle nullified damage on a client, displaying a message to admins with the slay flag.
+    // Toggle massive damage on a client, displaying a message to admins with the slay flag.
     if (!g_bClientMassiveDamage[target]) {
         g_bClientMassiveDamage[target] = true;
         Format(message, sizeof(message), "[SM] %s: Made %s take stupid damage.", clientName, name);
