@@ -5,7 +5,7 @@
 #include <sdkhooks>
 
 // Global definitions
-#define PLUGIN_VERSION "1.1.0"
+#define PLUGIN_VERSION "1.2.0"
 
 // Boolean arrays to determine which clients do 0.01 damage and take 9999.0 damage.
 new bool:g_bClientNullDamage[MAXPLAYERS+1] = {false, ... };
@@ -23,13 +23,14 @@ public Plugin:myinfo =
 
 // Plugin started
 public OnPluginStart() {
+    LoadTranslations("common.phrases");
+
     CreateConVar("sm_nullrekt_version", PLUGIN_VERSION, "Prints version number.", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY);
 
     // Register commands.
     RegAdminCmd("sm_null", Command_Nullify, ADMFLAG_SLAY, "Prevents a client from dealing damage.");
     RegAdminCmd("sm_rekt", Command_Rektify, ADMFLAG_SLAY, "Toggles whether all damage on a client does 999 damage.");
     RegAdminCmd("sm_nullrekt_list", Command_NullifyList, ADMFLAG_SLAY, "List clients that take massive damage.");
-    RegAdminCmd("sm_nullrekt_reset", Command_Reset, ADMFLAG_SLAY, "Resets state of the plugin so everything does normal damage.");
     
     // Hook from all running clients.
     for (new i = 1; i <= MaxClients; i++) {
@@ -52,67 +53,61 @@ public OnClientPutInServer(client) {
 public Action:Command_Nullify(client, args) {
     // No player specified.
     if (args == 0) {
-        ReplyToCommand(client, "Usage: sm_nullify <target>");
+        ReplyToCommand(client, "Usage: sm_null <target> [0|1]");
         return Plugin_Handled;
     }
  
-    // Allocate and get the player argument.
-    new String:arg1[32];
+    // Allocate argument values.
+    decl String:arg1[32], String:arg2[32];
+    
+    // Get the player argument.
     GetCmdArg(1, arg1, sizeof(arg1));
+    
+    // Optional variable to force a setting, if multi-targetting, required.
+    new bool:toggle = true, bool:overrideTo = false;
+    if (args >= 2 && GetCmdArg(2, arg2, sizeof(arg2))) {
+        toggle = false;
+		overrideTo = StringToInt(arg2) == 1;
+	}
  
-    // Attempt to find a matching player.
-    // TODO Implement handling for @all, etc. even though we should really only be targeting one player.
-    new target = FindTarget(client, arg1);
-    if (target == -1) {
-        // FindTarget() automatically replies with the failure reason.
-        return Plugin_Handled;
-    }
-    
-    // TODO Implement boolean argument to force enable/disable.
+    // Attempt to find a matching player(s).
+    decl String:target_name[MAX_TARGET_LENGTH];
+	decl target_list[MAXPLAYERS], target_count, bool:tn_is_ml;
+	
+    if ((target_count = ProcessTargetString(arg1, client, target_list, MAXPLAYERS, 
+            COMMAND_FILTER_ALIVE & COMMAND_FILTER_DEAD, target_name, sizeof(target_name), tn_is_ml)) <= 0) {
+		ReplyToTargetError(client, target_count);
+		return Plugin_Handled;
+	}
 
-    // Allocate memory to hold the name.
-    new String:name[MAX_NAME_LENGTH];
-    GetClientName(target, name, sizeof(name));
-    
-    // Allocate memory for name of client performing action.
-    new String:clientName[MAX_NAME_LENGTH];
+	// Allocate memory for name of client performing action.
+    decl String:clientName[MAX_NAME_LENGTH], String:message[80];
     GetClientName(client, clientName, sizeof(clientName));
-    
-    new String:message[80];
-    
-    // Toggle nullified damage on a client, displaying a message to admins with the slay flag.
-    // Not using default notification method to disregard notification flags.
-    if (!g_bClientNullDamage[target]) {
-        g_bClientNullDamage[target] = true;
-        Format(message, sizeof(message), "[SM] %s: Made %s deal almost-zero damage.", clientName, name);
+	
+	if (target_count == 1) {
+        new target = target_list[0];
+        if (toggle) {
+            g_bClientNullDamage[target] = !g_bClientNullDamage[target];
+        } else {
+            g_bClientNullDamage[target] = overrideTo;
+        }
+        
+        Format(message, sizeof(message), "[SM] %s: Made %s deal %s damage.", clientName, target_name,
+                g_bClientNullDamage[target_list[0]] ? "almost zero" : "normal");
         PrintToAdmins(message, "f");
-    } else {
-        g_bClientNullDamage[target] = false;
-        Format(message, sizeof(message), "[SM] %s: Made %s deal normal damage.", clientName, name);
-        PrintToAdmins(message, "f");
-    }
-
-    return Plugin_Handled;
-}
-
-public Action:Command_Reset(client, args) {
-    for (new i = 1; i <= MaxClients; i++) {
-        if (IsClientInGame(i) && !IsClientReplay(i) && !IsClientSourceTV(i)) {
-            g_bClientNullDamage[i] = false;
-            g_bClientMassiveDamage[i] = false;
+	} else {
+        if (!toggle) {
+            for (new i = 0; i < target_count; i++) {
+                g_bClientNullDamage[target_list[i]] = overrideTo;
+            }
+            
+            Format(message, sizeof(message), "[SM] %s: Forced %s to deal %s damage.", clientName, target_name,
+                overrideTo ? "almost zero" : "normal");
+            PrintToAdmins(message, "f");
+        } else {
+            ReplyToCommand(client, "Usage: sm_null <target> [0|1]\nMissing required boolean parameter.");
         }
     }
-
-    // Allocate memory for name of client performing action.
-    new String:clientName[MAX_NAME_LENGTH];
-    GetClientName(client, clientName, sizeof(clientName));
-    
-    // Allocate space for message.
-    new String:message[96];
-
-    // Notify all admins with slay flag of reset.
-    Format(message, sizeof(message), "[SM] %s: Reset nullified / rekt status on all players.", clientName, name);
-    PrintToAdmins(message, "f");
     
     return Plugin_Handled;
 }
@@ -120,42 +115,62 @@ public Action:Command_Reset(client, args) {
 public Action:Command_Rektify(client, args) {
     // No player specified.
     if (args == 0) {
-        ReplyToCommand(client, "Usage: sm_rekt <target>");
+        ReplyToCommand(client, "Usage: sm_rekt <target> [0|1]");
         return Plugin_Handled;
     }
  
-    // Allocate and get the player argument.
-    new String:arg1[32];
+    // Allocate argument values.
+    decl String:arg1[32], String:arg2[32];
+    
+    // Get the player argument.
     GetCmdArg(1, arg1, sizeof(arg1));
+    
+    // Optional variable to force a setting, if multi-targetting, required.
+    new bool:toggle = true, bool:overrideTo = false;
+    if (args >= 2 && GetCmdArg(2, arg2, sizeof(arg2))) {
+        toggle = false;
+		overrideTo = StringToInt(arg2) == 1;
+	}
  
-    // Attempt to find a matching player.
-    new target = FindTarget(client, arg1);
-    if (target == -1) {
-        // FindTarget() automatically replies with the failure reason.
-        return Plugin_Handled;
-    }
+    // Attempt to find a matching player(s).
+    decl String:target_name[MAX_TARGET_LENGTH];
+	decl target_list[MAXPLAYERS], target_count, bool:tn_is_ml;
+	
+    if ((target_count = ProcessTargetString(arg1, client, target_list, MAXPLAYERS, 
+            COMMAND_FILTER_ALIVE & COMMAND_FILTER_DEAD, target_name, sizeof(target_name), tn_is_ml)) <= 0) {
+		ReplyToTargetError(client, target_count);
+		return Plugin_Handled;
+	}
 
-    // Allocate memory to hold the name.
-    new String:name[MAX_NAME_LENGTH];
-    GetClientName(target, name, sizeof(name));
-    
-    // Allocate memory for name of client performing action.
-    new String:clientName[MAX_NAME_LENGTH];
+	// Allocate memory for name of client performing action.
+    decl String:clientName[MAX_NAME_LENGTH], String:message[80];
     GetClientName(client, clientName, sizeof(clientName));
-    
-    new String:message[80];
-    
-    // Toggle massive damage on a client, displaying a message to admins with the slay flag.
-    if (!g_bClientMassiveDamage[target]) {
-        g_bClientMassiveDamage[target] = true;
-        Format(message, sizeof(message), "[SM] %s: Made %s take stupid damage.", clientName, name);
+	
+	if (target_count == 1) {
+        new target = target_list[0];
+        if (toggle) {
+            g_bClientMassiveDamage[target] = !g_bClientMassiveDamage[target];
+        } else {
+            g_bClientMassiveDamage[target] = overrideTo;
+        }
+        
+        Format(message, sizeof(message), "[SM] %s: Made %s take %s damage.", clientName, target_name,
+                g_bClientMassiveDamage[target_list[0]] ? "stupid" : "normal");
         PrintToAdmins(message, "f");
-    } else {
-        g_bClientMassiveDamage[target] = false;
-        Format(message, sizeof(message), "[SM] %s: Made %s take normal damage.", clientName, name);
-        PrintToAdmins(message, "f");
+	} else {
+        if (!toggle) {
+            for (new i = 0; i < target_count; i++) {
+                g_bClientMassiveDamage[target_list[i]] = overrideTo;
+            }
+            
+            Format(message, sizeof(message), "[SM] %s: Forced %s to take %s damage.", clientName, target_name,
+                overrideTo ? "stupid" : "normal");
+            PrintToAdmins(message, "f");
+        } else {
+            ReplyToCommand(client, "Usage: sm_rekt <target> [0|1]\nMissing required boolean parameter.");
+        }
     }
-
+    
     return Plugin_Handled;
 }
 
