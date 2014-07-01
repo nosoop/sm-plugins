@@ -17,7 +17,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION "1.1.0"
+#define PLUGIN_VERSION "1.2.0"
 
 #define INVIS					{255,255,255,0}
 #define NORMAL					{255,255,255,255}
@@ -75,9 +75,9 @@ public OnPluginStart() {
     Cvar_Announcement = CreateConVar("sm_propbonus_announcement", "1", "Public announcement msg at start of bonus round?(1/0 = yes/no)");
     Cvar_HitRemoveProp = CreateConVar("sm_propbonus_removeproponhit", "0", "Remove player prop once they take damage?(1/0 = yes/no)");
     Cvar_Respawnplayer = CreateConVar("sm_propbonus_respawndead", "0", "Respawn dead players at start of bonusround?(1/0 = yes/no)");
-    Cvar_ThirdTriggers = CreateConVar("sm_propbonus_triggers", "thirdperson,third", "SM command triggers for thirdperson - Separated by commas. Each will have the !third, /third, sm_third associated with it.");
+    Cvar_ThirdTriggers = CreateConVar("sm_propbonus_triggers", "tp,third", "SM command triggers for thirdperson - Separated by commas. Each will have the !third, /third, sm_third associated with it.");
 
-    RegAdminCmd("sm_propplayer", Command_Propplayer, ADMFLAG_BAN, "sm_propplayer <#userid|name>");
+    RegAdminCmd("sm_prop", Command_Propplayer, ADMFLAG_BAN, "sm_prop <#userid|name>");
 
     HookEvent("teamplay_round_start", Hook_RoundStart, EventHookMode_Post);
     HookEvent("teamplay_round_win", Hook_RoundWin, EventHookMode_Post);
@@ -286,13 +286,11 @@ public Action:Timer_EquipProps(Handle:timer) {
         
         //If player is already a prop, skip id.
         if(g_IsPropModel[x] != 0) {
-            //PrintToChatAll("Client %i already is a prop, skipped", x);
             continue;
         }
         
         //If admin only cvar is enabled and not admin, skip id.
         if((g_adminonlyCvar && !bIsPlayerAdmin[x])) {
-            //PrintToChatAll("Client %i doesnt have flag, skipped", x);
             continue;
         }
         
@@ -316,6 +314,9 @@ public CreatePropPlayer(client) {
     AcceptEntityInput(client, "SetCustomModel");
     SetVariantInt(1);
     AcceptEntityInput(client, "SetCustomModelRotates");
+    
+    // Strip weapons from propped player.
+    StripWeapons(client);
 
     //Print Model name info to client
     PrintCenterText(client, "You are a %s!", sName);
@@ -335,7 +336,7 @@ PerformPropPlayer(client, target) {
         CreatePropPlayer(target);
         
         LogAction(client, target, "\"%L\" set prop on \"%L\"", client, target);
-        ShowActivity(client, " set prop on %N", target);
+        ShowActivity(client, " Set prop on %N", target);
     } else {
         Colorize(target, NORMAL);
         RemovePropModel(target);
@@ -345,7 +346,21 @@ PerformPropPlayer(client, target) {
         }
         
         LogAction(client, target, "\"%L\" removed prop on \"%L\"", client, target);
-        ShowActivity(client, " removed prop on %N", target);
+        ShowActivity(client, " Removed prop on %N", target);
+        
+        // Return the items to the player by respawning them and teleporting them back into position.
+        decl Float:origin[3], Float:angle[3], Float:velocity[3];
+        GetClientAbsOrigin(client, origin);
+        GetClientEyeAngles(client, angle);
+        GetEntPropVector(client, Prop_Data, "m_vecAbsVelocity", velocity);
+        
+        // Also force them back to their current class.
+        decl TFClassType:class;
+        class = TF2_GetPlayerClass(target);
+        TF2_SetPlayerClass(target, class);
+        TF2_RespawnPlayer(target);
+        
+        TeleportEntity(client, origin, angle, velocity);
     }
 }
 
@@ -599,36 +614,26 @@ SetupDefaultProplistFile() {
     KvSetString(hKVBuildProplist, "Oildrum", "models/props_2fort/oildrum.mdl");
     KvSetString(hKVBuildProplist, "Barricade Sign", "models/props_gameplay/sign_barricade001a.mdl");
     KvSetString(hKVBuildProplist, "Stack of Tires", "models/props_2fort/tire002.mdl");
-    //KvSetString(hKVBuildProplist, "Tire", "models/props_2fort/tire001.mdl"); //commented due to polycount
-    //KvSetString(hKVBuildProplist, "Oil Can", "models/props_farm/oilcan02.mdl");  //commented due to polycount
     KvSetString(hKVBuildProplist, "Dynamite Crate", "models/props_2fort/miningcrate001.mdl");
-    //KvSetString(hKVBuildProplist, "Water Pump", "models/props_2fort/waterpump001.mdl");  //commented due to polycount
-    //KvSetString(hKVBuildProplist, "Control Point", "models/props_gameplay/cap_point_base.mdl"); //commented due to polycount
+    KvSetString(hKVBuildProplist, "Control Point", "models/props_gameplay/cap_point_base.mdl");
     KvSetString(hKVBuildProplist, "Metal Bucket", "models/props_2fort/metalbucket001.mdl");
-    //KvSetString(hKVBuildProplist, "Trashcan", "models/props_2fort/wastebasket01.mdl");
-    //KvSetString(hKVBuildProplist, "Wood Barrel", "models/props_farm/wooden_barrel.mdl");
     KvSetString(hKVBuildProplist, "Lantern", "models/props_2fort/lantern001_off.mdl");
     KvSetString(hKVBuildProplist, "Stack of Trainwheels", "models/props_2fort/trainwheel003.mdl");
-    //KvSetString(hKVBuildProplist, "Corrugated Metal", "models/props_2fort/corrugated_metal003.mdl"); //commented due to polycount
     KvSetString(hKVBuildProplist, "Milk Jug", "models/props_2fort/milkjug001.mdl");
     KvSetString(hKVBuildProplist, "Mop and Bucket", "models/props_2fort/mop_and_bucket.mdl");
     KvSetString(hKVBuildProplist, "Propane Tank", "models/props_2fort/propane_tank_tall01.mdl");
-    //KvSetString(hKVBuildProplist, "Tombstone", "models/props_halloween/tombstone_01.mdl");  //commented due to polycount
     KvSetString(hKVBuildProplist, "Cow Cutout", "models/props_2fort/cow001_reference.mdl");
     KvSetString(hKVBuildProplist, "Biohazard Barrel", "models/props_badlands/barrel01.mdl");
     KvSetString(hKVBuildProplist, "Wood Pallet", "models/props_farm/pallet001.mdl");
     KvSetString(hKVBuildProplist, "Hay Patch", "models/props_farm/haypile001.mdl");
-    //KvSetString(hKVBuildProplist, "Concrete Block", "models/props_farm/concrete_block001.mdl"); //commented due to polycount
     KvSetString(hKVBuildProplist, "Shrub", "models/props_forest/shrub_03b.mdl");
     KvSetString(hKVBuildProplist, "Wood Pile", "models/props_farm/wood_pile.mdl");
     KvSetString(hKVBuildProplist, "Welding Machine", "models/props_farm/welding_machine01.mdl");
     KvSetString(hKVBuildProplist, "Giant Cactus", "models/props_foliage/cactus01.mdl");
     KvSetString(hKVBuildProplist, "Tree", "models/props_foliage/tree01.mdl");
-    //KvSetString(hKVBuildProplist, "Cluster of Shrubs", "models/props_foliage/shrub_03_cluster.mdl"); //commented due to polycount
     KvSetString(hKVBuildProplist, "Spike Plant", "models/props_foliage/spikeplant01.mdl");
     KvSetString(hKVBuildProplist, "Grain Sack", "models/props_granary/grain_sack.mdl");
     KvSetString(hKVBuildProplist, "Traffic Cone", "models/props_gameplay/orange_cone001.mdl");
-    //KvSetString(hKVBuildProplist, "Weather Vane", "models/props_2fort/weathervane001.mdl");
     KvSetString(hKVBuildProplist, "Milk Crate", "models/props_forest/milk_crate.mdl");
     KvSetString(hKVBuildProplist, "Rock", "models/props_nature/rock_worn001.mdl");
     KvSetString(hKVBuildProplist, "Computer Cart", "models/props_well/computer_cart01.mdl");
@@ -636,12 +641,7 @@ SetupDefaultProplistFile() {
     KvSetString(hKVBuildProplist, "Wood Fence", "models/props_mining/fence001_reference.mdl");
     KvSetString(hKVBuildProplist, "Hay Bale", "models/props_gameplay/haybale.mdl");
     KvSetString(hKVBuildProplist, "Water Cooler", "models/props_spytech/watercooler.mdl");
-    //KvSetString(hKVBuildProplist, "Television", "models/props_spytech/tv001.mdl"); //commented due to polycount
-    //KvSetString(hKVBuildProplist, "Jackolantern", "models/props_halloween/jackolantern_02.mdl"); //commented due to polycount
     KvSetString(hKVBuildProplist, "Terminal Chair", "models/props_spytech/terminal_chair.mdl");
-    //KvSetString(hKVBuildProplist, "Hand Truck", "models/props_well/hand_truck01.mdl");  //commented due to polycount
-    //KvSetString(hKVBuildProplist, "Sink", "models/props_2fort/sink001.mdl");  //commented due to polycount
-    KvSetString(hKVBuildProplist, "Chimney", "models/props_2fort/chimney005.mdl");
 
     KvRewind(hKVBuildProplist);			
     KeyValuesToFile(hKVBuildProplist, g_sConfigPath);
