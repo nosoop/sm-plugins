@@ -239,12 +239,14 @@ public Hook_RoundStart(Handle:event, const String:name[], bool:dontBroadcast) {
             continue;
         }
 
-        Colorize(x, NORMAL);
-        RemovePropModel(x);
+        //Colorize(x, NORMAL);
+        //RemovePropModel(x);
         
-        if(g_InThirdperson[x]) {
-            SetThirdPerson(x, false);
-        }
+        //if(g_InThirdperson[x]) {
+        //    SetThirdPerson(x, false);
+        //}
+        
+        UnpropPlayer(x);
     }
     
     g_bBonusRound = false;
@@ -282,6 +284,7 @@ public Action:Timer_EquipProps(Handle:timer) {
         if(!IsPlayerAlive(x)) {
             if(g_respawnplayerCvar) {
                 TF2_RespawnPlayer(x);
+                SetThirdPerson(x, true);
             } else {
                 continue;
             }
@@ -298,13 +301,13 @@ public Action:Timer_EquipProps(Handle:timer) {
         }
         
         if(IsPlayerAlive(x)) {
-            StripWeapons(x);
             CreatePropPlayer(x);
         }
     }
 }
 
-public CreatePropPlayer(client) {
+// Turns a client into a prop.
+CreatePropPlayer(client) {
     g_iPlayerModelIndex[client] = GetRandomInt(0, g_iArraySize);
     new String:sPath[PLATFORM_MAX_PATH], String:sName[128];
     GetArrayString(g_hModelNames, g_iPlayerModelIndex[client], sName, sizeof(sName));
@@ -313,13 +316,23 @@ public CreatePropPlayer(client) {
     g_IsPropModel[client] = 1;
     Colorize(client, INVIS);
 
+    // Set to prop model.
     SetVariantString(sPath);
     AcceptEntityInput(client, "SetCustomModel");
+    
+    // Enable rotation on the custom model.
     SetVariantInt(1);
     AcceptEntityInput(client, "SetCustomModelRotates");
     
+    // Set client to third-person.
+    SetThirdPerson(client, true);
+    
     // Strip weapons from propped player.
     StripWeapons(client);
+    
+    // Kill wearables so Unusual effects do not show.
+    // No worries, they'll be remade on spawn.
+    RemoveWearables(client);
 
     //Print Model name info to client
     PrintCenterText(client, "You are a %s!", sName);
@@ -330,29 +343,20 @@ public CreatePropPlayer(client) {
     }
 }
 
-PerformPropPlayer(client, target) {
-    if(!IsClientInGame(target) || !IsPlayerAlive(target))
-        return;
+// Turns a client into a not-prop.
+UnpropPlayer(client, bool:respawn = false) {
+    Colorize(target, NORMAL);
+    RemovePropModel(target);
     
-    if(g_IsPropModel[target] == 0) {
-        Colorize(target, INVIS);
-        CreatePropPlayer(target);
-        
-        SetThirdPerson(client, true);
-        
-        LogAction(client, target, "\"%L\" set prop on \"%L\"", client, target);
-        ShowActivity(client, " Set prop on %N", target);
-    } else {
-        Colorize(target, NORMAL);
-        RemovePropModel(target);
-        
-        if(g_InThirdperson[target])	{
-            SetThirdPerson(target, false);
-        }
-        
-        LogAction(client, target, "\"%L\" removed prop on \"%L\"", client, target);
-        ShowActivity(client, " Removed prop on %N", target);
-        
+    if(g_InThirdperson[target])	{
+        SetThirdPerson(target, false);
+    }
+    
+    // Clear proplock flag.
+    g_bIsPropLocked[client] = false;
+    g_IsPropModel[client] = 0;
+    
+    if (respawn) {
         // Return the items to the player by respawning them and teleporting them back into position.
         decl Float:origin[3], Float:angle[3], Float:velocity[3];
         GetClientAbsOrigin(client, origin);
@@ -366,6 +370,21 @@ PerformPropPlayer(client, target) {
         TF2_RespawnPlayer(target);
         
         TeleportEntity(client, origin, angle, velocity);
+    }
+}
+
+PerformPropPlayer(client, target) {
+    if(!IsClientInGame(target) || !IsPlayerAlive(target))
+        return;
+    
+    if(g_IsPropModel[target] == 0) {
+        CreatePropPlayer(target);
+        LogAction(client, target, "\"%L\" set prop on \"%L\"", client, target);
+        ShowActivity(client, " Set prop on %N", target);
+    } else {
+        UnpropPlayer(target, true);
+        LogAction(client, target, "\"%L\" removed prop on \"%L\"", client, target);
+        ShowActivity(client, " Removed prop on %N", target);
     }
 }
 
@@ -448,7 +467,7 @@ public Action:UnsetPropLockToggleDelay(Handle:timer, any:client) {
 }
 
 // Credit to pheadxdll and FoxMulder for invisibility code.
-public Colorize(client, color[4]) {	
+Colorize(client, color[4]) {	
     new bool:type;
     new TFClassType:class = TF2_GetPlayerClass(client);
     
@@ -458,8 +477,7 @@ public Colorize(client, color[4]) {
     if(color[3] > 0)
         type = true;
 
-    if(class == TFClass_DemoMan)
-    {
+    if(class == TFClass_DemoMan) {
         SetWearablesRGBA_Impl(client, "tf_wearable_item_demoshield", "CTFWearableItemDemoShield", color);
         SetGlowingEyes(client, type);
     }
@@ -467,6 +485,7 @@ public Colorize(client, color[4]) {
     return;
 }
 
+// Set entity class color based on having a client as parent.
 SetWearablesRGBA_Impl(client,  const String:entClass[], const String:serverClass[], color[4]) {
     new ent = -1;
     while((ent = FindEntityByClassname(ent, entClass)) != -1) {
@@ -474,6 +493,18 @@ SetWearablesRGBA_Impl(client,  const String:entClass[], const String:serverClass
             if(GetEntDataEnt2(ent, FindSendPropOffs(serverClass, "m_hOwnerEntity")) == client) {
                 SetEntityRenderMode(ent, RENDER_TRANSCOLOR);
                 SetEntityRenderColor(ent, color[0], color[1], color[2], color[3]);
+            }
+        }
+    }
+}
+
+// Attempt to remove client wearables. ... this may or may not be a terrible idea.
+RemoveWearables(client) {
+    new ent = -1;
+    while((ent = FindEntityByClassname(ent, "tf_wearable")) != -1) {
+        if(IsValidEntity(ent)) {		
+            if(GetEntDataEnt2(ent, FindSendPropOffs("CTFWearable", "m_hOwnerEntity")) == client) {
+                AcceptEntityInput(ent, "Kill");
             }
         }
     }
@@ -705,6 +736,7 @@ SetupDefaultProplistFile() {
 StripWeapons(client) {
     if(IsClientInGame(client) && IsPlayerAlive(client)) {
         TF2_RemoveAllWeapons(client);
+        TF2_RemoveWeaponSlot(client, 8);
     }
 }
 
