@@ -1,6 +1,6 @@
 /*
 * Prop Bonus Round (TF2) 
-* Author(s): retsam
+* Author(s): retsam, cleaned up by nosoop
 * File: prop_bonus_round.sp
 * Description: Turns the losing team into random props during bonus round!
 *
@@ -17,7 +17,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION "1.2.1"
+#define PLUGIN_VERSION "1.3.0"
 
 #define INVIS					{255,255,255,0}
 #define NORMAL					{255,255,255,255}
@@ -43,6 +43,9 @@ new g_iArraySize;
 new g_winnerTeam;
 
 new bool:g_InThirdperson[MAXPLAYERS+1] = { false, ... };
+new bool:g_bIsPropLocked[MAXPLAYERS+1] = { false, ... };
+new bool:g_bRecentlySetPropLock[MAXPLAYERS+1] = { false, ... };
+
 new g_IsPropModel[MAXPLAYERS+1] = { 0, ... };
 new g_iPlayerModelIndex[MAXPLAYERS+1] = { -1, ... };
 
@@ -397,6 +400,53 @@ SetThirdPerson(target, bool:bEnabled) {
     g_InThirdperson[target] = bEnabled;
 }
 
+// Global forward to test if a client wants to enable proplock.
+public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:angles[3], &weapon) {
+    // Only run the checks when the client is a prop.
+    if (g_IsPropModel[client] == 1) {
+        // +attack toggles prop locking.
+        if ((buttons & IN_ATTACK) == IN_ATTACK) {
+            if (!g_bRecentlySetPropLock[client]) {
+                // Toggle proplock state.
+                g_bIsPropLocked[client] = !g_bIsPropLocked[client];
+                
+                // Disable ability to rotate model when proplock is enabled.
+                SetVariantInt(g_bIsPropLocked[client] ? 0 : 1);
+                AcceptEntityInput(client, "SetCustomModelRotates");
+                
+                // Almost disable all movement if proplock is enabled.
+                if (g_bIsPropLocked[client]) {
+                    SetEntPropFloat(client, Prop_Send, "m_flMaxspeed", 1.0);
+                } else {
+                    // Stunning the player resets their speed to default.
+                    TF2_StunPlayer(client, 0.0, 0.0, TF_STUNFLAG_SLOWDOWN);
+                }
+                
+                // Show hint text.
+                PrintHintText(client, "%s prop lock.", g_bIsPropLocked[client] ? "Enabled" : "Disabled");
+                
+                // Lock in the proplock settings, as this will be run while +attack is held.
+                g_bRecentlySetPropLock[client] = true;
+                CreateTimer(1.0, UnsetPropLockToggleDelay, client);
+            }
+            return Plugin_Handled;
+        }
+        
+        // +jump is disabled when prop is locked.
+        if ((buttons & IN_JUMP) == IN_JUMP) {
+            if (g_bIsPropLocked[client]) {
+                return Plugin_Handled;
+            }
+        }
+    }
+    return Plugin_Continue;
+}
+
+public Action:UnsetPropLockToggleDelay(Handle:timer, any:client) {
+    // Clear lock on proplock settings.
+	g_bRecentlySetPropLock[client] = false;
+}
+
 // Credit to pheadxdll and FoxMulder for invisibility code.
 public Colorize(client, color[4]) {	
     new bool:type;
@@ -672,9 +722,7 @@ CheckGame() {
     new String:strGame[10];
     GetGameFolderName(strGame, sizeof(strGame));
     
-    if(StrEqual(strGame, "tf")) {
-        PrintToServer("[propbonusround] Detected game [TF2], plugin v%s loaded..", PLUGIN_VERSION);
-    } else {
+    if(!StrEqual(strGame, "tf")) {
         SetFailState("[propbonusround] Detected game other than [TF2], plugin disabled.");
     }
 }
