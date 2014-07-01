@@ -17,7 +17,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION "1.2.0"
+#define PLUGIN_VERSION "1.2.1"
 
 #define INVIS					{255,255,255,0}
 #define NORMAL					{255,255,255,255}
@@ -152,7 +152,7 @@ public Action:Command_Propplayer(client, args) {
     decl bool:tn_is_ml;
     
     if (args < 1) {
-        ReplyToCommand(client, "[SM] Usage: sm_propplayer <#userid|name>");
+        ReplyToCommand(client, "[SM] Usage: sm_prop <#userid|name>");
         return Plugin_Handled;
     }
     
@@ -187,7 +187,7 @@ public Hook_PlayerHurt(Handle:event, const String:name[], bool:dontBroadcast) {
         RemovePropModel(client);
 
         if(g_InThirdperson[client]) {
-            SwitchView(client, false);
+            SetThirdPerson(client, false);
         }
     }
 }
@@ -214,7 +214,7 @@ public Hook_Playerdeath(Handle:event, const String:name[], bool:dontBroadcast) {
         g_iPlayerModelIndex[client] = -1;
         
         if(g_InThirdperson[client]) {
-            SwitchView(client, false);
+            SetThirdPerson(client, false);
             
             g_IsPropModel[client] = 0;
         }
@@ -240,7 +240,7 @@ public Hook_RoundStart(Handle:event, const String:name[], bool:dontBroadcast) {
         RemovePropModel(x);
         
         if(g_InThirdperson[x]) {
-            SwitchView(x, false);
+            SetThirdPerson(x, false);
         }
     }
     
@@ -335,6 +335,8 @@ PerformPropPlayer(client, target) {
         Colorize(target, INVIS);
         CreatePropPlayer(target);
         
+        SetThirdPerson(client, true);
+        
         LogAction(client, target, "\"%L\" set prop on \"%L\"", client, target);
         ShowActivity(client, " Set prop on %N", target);
     } else {
@@ -342,7 +344,7 @@ PerformPropPlayer(client, target) {
         RemovePropModel(target);
         
         if(g_InThirdperson[target])	{
-            SwitchView(target, false);
+            SetThirdPerson(target, false);
         }
         
         LogAction(client, target, "\"%L\" removed prop on \"%L\"", client, target);
@@ -375,9 +377,9 @@ public Action:Command_Thirdperson(client, args) {
 
     if(g_IsPropModel[client] != 0) {
         if(!g_InThirdperson[client]) {
-            SwitchView(client, true);
+            SetThirdPerson(client, true);
         } else {
-            SwitchView(client, false);
+            SetThirdPerson(client, false);
         }
     } else {
         ReplyToCommand(client, "[SM] You must be a PROP to use thirdperson.");
@@ -388,11 +390,11 @@ public Action:Command_Thirdperson(client, args) {
 
 // Enables and disables third-person mode.
 // Source: https://forums.alliedmods.net/showthread.php?p=1694178?p=1694178
-SwitchView(target, bool:observer) {	
-    SetVariantInt(observer ? 1 : 0);
+SetThirdPerson(target, bool:bEnabled) {
+    SetVariantInt(bEnabled ? 1 : 0);
     AcceptEntityInput(target, "SetForcedTauntCam");
     
-    g_InThirdperson[target] = !g_InThirdperson[target];
+    g_InThirdperson[target] = bEnabled;
 }
 
 // Credit to pheadxdll and FoxMulder for invisibility code.
@@ -750,7 +752,7 @@ public Cvars_Changed(Handle:convar, const String:oldValue[], const String:newVal
                         RemovePropModel(x);
                     }
                     if(g_InThirdperson[x]) {
-                        SwitchView(x, false);
+                        SetThirdPerson(x, false);
                     }
                 }
             }
