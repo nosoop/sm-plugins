@@ -5,7 +5,7 @@
 #include <sdkhooks>
 
 // Global definitions
-#define PLUGIN_VERSION "1.2.0"
+#define PLUGIN_VERSION "1.2.1"
 
 // Boolean arrays to determine which clients do 0.01 damage and take 9999.0 damage.
 new bool:g_bClientNullDamage[MAXPLAYERS+1] = {false, ... };
@@ -67,24 +67,24 @@ public Action:Command_Nullify(client, args) {
     new bool:toggle = true, bool:overrideTo = false;
     if (args >= 2 && GetCmdArg(2, arg2, sizeof(arg2))) {
         toggle = false;
-		overrideTo = StringToInt(arg2) == 1;
-	}
+        overrideTo = StringToInt(arg2) == 1;
+    }
  
     // Attempt to find a matching player(s).
     decl String:target_name[MAX_TARGET_LENGTH];
-	decl target_list[MAXPLAYERS], target_count, bool:tn_is_ml;
-	
+    decl target_list[MAXPLAYERS], target_count, bool:tn_is_ml;
+    
     if ((target_count = ProcessTargetString(arg1, client, target_list, MAXPLAYERS, 
             COMMAND_FILTER_ALIVE & COMMAND_FILTER_DEAD, target_name, sizeof(target_name), tn_is_ml)) <= 0) {
-		ReplyToTargetError(client, target_count);
-		return Plugin_Handled;
-	}
+        ReplyToTargetError(client, target_count);
+        return Plugin_Handled;
+    }
 
-	// Allocate memory for name of client performing action.
+    // Allocate memory for name of client performing action.
     decl String:clientName[MAX_NAME_LENGTH], String:message[80];
     GetClientName(client, clientName, sizeof(clientName));
-	
-	if (target_count == 1) {
+    
+    if (target_count == 1) {
         new target = target_list[0];
         if (toggle) {
             g_bClientNullDamage[target] = !g_bClientNullDamage[target];
@@ -92,10 +92,11 @@ public Action:Command_Nullify(client, args) {
             g_bClientNullDamage[target] = overrideTo;
         }
         
-        Format(message, sizeof(message), "[SM] %s: Made %s deal %s damage.", clientName, target_name,
+        Format(message, sizeof(message), "[SM] %s: %s %s to deal %s damage.", clientName,
+                toggle ? "Toggled" : "Forced", target_name,
                 g_bClientNullDamage[target_list[0]] ? "almost zero" : "normal");
         PrintToAdmins(message, "f");
-	} else {
+    } else {
         if (!toggle) {
             for (new i = 0; i < target_count; i++) {
                 g_bClientNullDamage[target_list[i]] = overrideTo;
@@ -129,24 +130,24 @@ public Action:Command_Rektify(client, args) {
     new bool:toggle = true, bool:overrideTo = false;
     if (args >= 2 && GetCmdArg(2, arg2, sizeof(arg2))) {
         toggle = false;
-		overrideTo = StringToInt(arg2) == 1;
-	}
+        overrideTo = StringToInt(arg2) == 1;
+    }
  
     // Attempt to find a matching player(s).
     decl String:target_name[MAX_TARGET_LENGTH];
-	decl target_list[MAXPLAYERS], target_count, bool:tn_is_ml;
-	
+    decl target_list[MAXPLAYERS], target_count, bool:tn_is_ml;
+    
     if ((target_count = ProcessTargetString(arg1, client, target_list, MAXPLAYERS, 
             COMMAND_FILTER_ALIVE & COMMAND_FILTER_DEAD, target_name, sizeof(target_name), tn_is_ml)) <= 0) {
-		ReplyToTargetError(client, target_count);
-		return Plugin_Handled;
-	}
+        ReplyToTargetError(client, target_count);
+        return Plugin_Handled;
+    }
 
-	// Allocate memory for name of client performing action.
+    // Allocate memory for name of client performing action.
     decl String:clientName[MAX_NAME_LENGTH], String:message[80];
     GetClientName(client, clientName, sizeof(clientName));
-	
-	if (target_count == 1) {
+    
+    if (target_count == 1) {
         new target = target_list[0];
         if (toggle) {
             g_bClientMassiveDamage[target] = !g_bClientMassiveDamage[target];
@@ -154,10 +155,11 @@ public Action:Command_Rektify(client, args) {
             g_bClientMassiveDamage[target] = overrideTo;
         }
         
-        Format(message, sizeof(message), "[SM] %s: Made %s take %s damage.", clientName, target_name,
+        Format(message, sizeof(message), "[SM] %s: %s %s to take %s damage.", clientName, 
+                toggle ? "Toggled" : "Forced", target_name,
                 g_bClientMassiveDamage[target_list[0]] ? "stupid" : "normal");
         PrintToAdmins(message, "f");
-	} else {
+    } else {
         if (!toggle) {
             for (new i = 0; i < target_count; i++) {
                 g_bClientMassiveDamage[target_list[i]] = overrideTo;
