@@ -17,7 +17,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION "1.0.1"
+#define PLUGIN_VERSION "1.1.0"
 
 #define INVIS					{255,255,255,0}
 #define NORMAL					{255,255,255,255}
@@ -66,6 +66,8 @@ public OnPluginStart() {
     CheckGame();
 
     CreateConVar("sm_propbonus_version", PLUGIN_VERSION, "Version of Prop Bonus Round", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_DONTRECORD);
+    
+    // Create cvar hooks
     Cvar_Enabled = CreateConVar("sm_propbonus_enabled", "1", "Enable/Disable prop bonus round plugin.");
     Cvar_AdminOnly = CreateConVar("sm_propbonus_adminonly", "0", "Enable plugin for admins only? (1/0 = yes/no)");
     Cvar_AdminFlag = CreateConVar("sm_propbonus_flag", "b", "Admin flag to use if adminonly is enabled (only one).  Must be a in char format.");
@@ -92,8 +94,7 @@ public OnPluginStart() {
     CreateThirdpersonCommands();
     
     new Handle:topmenu;
-    if (LibraryExists("adminmenu") && ((topmenu = GetAdminTopMenu()) != INVALID_HANDLE))
-    {
+    if (LibraryExists("adminmenu") && ((topmenu = GetAdminTopMenu()) != INVALID_HANDLE)) {
         OnAdminMenuReady(topmenu);
     }
     
@@ -157,15 +158,8 @@ public Action:Command_Propplayer(client, args) {
     
     GetCmdArg(1, target, sizeof(target));
     
-    if((target_count = ProcessTargetString(
-                    target,
-                    client,
-                    target_list,
-                    MAXPLAYERS,
-                    0,
-                    target_name,
-                    sizeof(target_name),
-                    tn_is_ml)) <= 0) {
+    if((target_count = ProcessTargetString(target, client, target_list, 
+            MAXPLAYERS, 0, target_name, sizeof(target_name), tn_is_ml)) <= 0) {
         ReplyToTargetError(client, target_count);
         return Plugin_Handled;
     }
@@ -253,8 +247,7 @@ public Hook_RoundStart(Handle:event, const String:name[], bool:dontBroadcast) {
     g_bBonusRound = false;
 }
 
-public Hook_RoundWin(Handle:event, const String:name[], bool:dontBroadcast)
-{
+public Hook_RoundWin(Handle:event, const String:name[], bool:dontBroadcast) {
     if(!g_bIsEnabled)
         return;
 
@@ -338,6 +331,7 @@ PerformPropPlayer(client, target) {
         return;
     
     if(g_IsPropModel[target] == 0) {
+        Colorize(target, INVIS);
         CreatePropPlayer(target);
         
         LogAction(client, target, "\"%L\" set prop on \"%L\"", client, target);
@@ -387,13 +381,12 @@ SwitchView(target, bool:observer) {
 }
 
 // Credit to pheadxdll and FoxMulder for invisibility code.
-public Colorize(client, color[4])
-{	
+public Colorize(client, color[4]) {	
     new bool:type;
     new TFClassType:class = TF2_GetPlayerClass(client);
     
     //Colorize the wearables, such as hats
-    SetWearablesRGBA_Impl(client, "tf_wearable_item", "CTFWearableItem", color);
+    SetWearablesRGBA_Impl(client, "tf_wearable", "CTFWearable", color);
     
     if(color[3] > 0)
         type = true;
@@ -460,11 +453,8 @@ stock TF2_RemoveCond(client, cond) {
     }
 } 
 
-/*
-Credit for SMC Parser related code goes to Antithasys!
-*/
-stock ProcessConfigFile()
-{
+// Credit for SMC Parser related code goes to Antithasys!
+stock ProcessConfigFile() {
     BuildPath(Path_SM, g_sConfigPath, sizeof(g_sConfigPath), "data/propbonusround_models.txt");
     
     // Model file checks. Auto-create or disable if necessary.
@@ -660,11 +650,9 @@ SetupDefaultProplistFile() {
     CloseHandle(hKVBuildProplist);
 }
 
-stock StripWeapons(client) {
+StripWeapons(client) {
     if(IsClientInGame(client) && IsPlayerAlive(client)) {
-        for(new x = 0; x <= 5; x++) {			
-            TF2_RemoveWeaponSlot(client, x);
-        }
+        TF2_RemoveAllWeapons(client);
     }
 }
 
