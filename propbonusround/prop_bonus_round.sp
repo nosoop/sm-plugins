@@ -7,28 +7,7 @@
 * Credits to: strontiumdog for the idea based off his DODS version.
 * Credits to: Antithasys for SMC Parser/SM auto-cmds code and much help!
 * 
-*
-* 1.3 - Accidently forgot about the whole hat invisibility issue in previous update. This is a fix for that.
-*
-* 1.2 - Removed colorize code. Decided to allow guns to show visible. 
-*     - Commented out 12 models from list as to help reduce strain on precache table that is causing crashes. Thx valve..
-*     - Did a little code maintenance....
-*     
-* 1.1 - Added check to make sure admin flag cvar isnt set to nothing.
-*     - Added cvar to respawn dead team players so everyone can be propped. 
-*
-* 1.0 - Added stripping of all weapons to fix issue of player view models getting visual glitches with new model code when pressing attack.
-* 0.9 - Possible fix for issue of models failing to be reset on round-start?
-* 0.8 - Added public announcement printtochatall msg w/ cvar. Fixed plugin being broken due to valve update. Fixed incorrect post hook callbacks.
-*       Had to remove (3) models from the models file due to them spawning halfway in ground and no longer being able to fix this.  Thirdperson command currently not showing models and needs fixing.
-* 0.7 - Removed Logactivity cvar, no longer needed I dont think. Removed the precache models console spam. 
-* 0.6 - Fix for non-prop errors. New Addcond code to deal with demoman glowing eyes. Flagged equip timer with timer_flag_no_mapchange. 
-* 0.5 - Changed deletion code again(Crash issues fixed?). Fixed couple potential issues related to plugin being disabled.
-* 0.4.1 - Changed the prop deletion code a bit. 
-* 0.4 - Removed sm_forcethird cvar, forgot losing team in TF2 is already put into thirdperson. Changed IsValidEdict to IsValidEntity(possible crash issue?). Added couple more models.
-* 0.3 - Added admin command for turning players into props. Moved some stuff around.
-* 0.2	- Added admin only cvar and flag.  Added a log debug cvar. Put in a couple checks related to model stuff. 
-* 0.1	- Initial release. 
+* 1.0.0 - Forked from https://forums.alliedmods.net/showthread.php?p=1096024
 */
 
 #pragma semicolon 1
@@ -38,7 +17,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION "1.3"
+#define PLUGIN_VERSION "1.0.1"
 
 #define INVIS					{255,255,255,0}
 #define NORMAL					{255,255,255,255}
@@ -63,14 +42,9 @@ new g_respawnplayerCvar;
 new g_iArraySize;
 new g_winnerTeam;
 
-new g_InThirdperson[MAXPLAYERS+1] = { 0, ... };
+new bool:g_InThirdperson[MAXPLAYERS+1] = { false, ... };
 new g_IsPropModel[MAXPLAYERS+1] = { 0, ... };
 new g_iPlayerModelIndex[MAXPLAYERS+1] = { -1, ... };
-//new g_iFov[MAXPLAYERS+1] = { -1, ... };
-//new g_iDefFov[MAXPLAYERS+1] = { -1, ... };
-
-new g_oFOV;
-new g_oDefFOV;
 
 new bool:bIsPlayerAdmin[MAXPLAYERS + 1] = { false, ... };
 new bool:g_bIsEnabled = true;
@@ -82,7 +56,7 @@ new String:g_sCharAdminFlag[32];
 public Plugin:myinfo = 
 {
 	name = "Prop Bonus Round",
-	author = "retsam",
+	author = "retsam, nosoop",
 	description = "Turns the losing team into random props during bonus round!",
 	version = PLUGIN_VERSION,
 	url = "www.multiclangaming.net"
@@ -116,9 +90,6 @@ public OnPluginStart()
 	HookConVarChange(Cvar_Announcement, Cvars_Changed);
 	HookConVarChange(Cvar_Respawnplayer, Cvars_Changed);
 	
-	g_oFOV = FindSendPropOffs("CBasePlayer", "m_iFOV");
-	g_oDefFOV = FindSendPropOffs("CBasePlayer", "m_iDefaultFOV");
-	
 	CreateThirdpersonCommands();
 	
 	new Handle:topmenu;
@@ -141,11 +112,9 @@ public OnClientPostAdminCheck(client)
 		bIsPlayerAdmin[client] = false;
 	}
 
-	g_InThirdperson[client] = 0;
+	g_InThirdperson[client] = false;
 	g_IsPropModel[client] = 0;
 	g_iPlayerModelIndex[client] = -1;
-	//g_iFov[client] = -1;
-	//g_iDefFov[client] = -1;
 }
 
 public OnConfigsExecuted()
@@ -164,7 +133,7 @@ public OnConfigsExecuted()
 
 public OnClientDisconnect(client)
 {
-	g_InThirdperson[client] = 0;
+	g_InThirdperson[client] = false;
 	g_iPlayerModelIndex[client] = -1;
 	g_IsPropModel[client] = 0;
 }
@@ -179,9 +148,7 @@ public OnMapStart()
 	for(new i = 0; i < GetArraySize(g_hModelNames); i++)
 	{
 		GetArrayString(g_hModelPaths, i, sPath, sizeof(sPath));
-		//GetArrayString(g_hModelNames, i, sName, sizeof(sName));
 		PrecacheModel(sPath, true);
-		//PrintToServer("Precached: %s - %s", sName, sPath);
 	} 
 }
 
@@ -241,9 +208,9 @@ public Hook_PlayerHurt(Handle:event, const String:name[], bool:dontBroadcast)
 		Colorize(client, NORMAL);
     RemovePropModel(client);
 
-		if(g_InThirdperson[client] == 1)
+		if(g_InThirdperson[client])
 		{
-			SwitchView(client, false, true);
+			SwitchView(client, false);
 		}
 	}
 }
@@ -269,19 +236,9 @@ public Hook_Playerdeath(Handle:event, const String:name[], bool:dontBroadcast)
 		AcceptEntityInput(client, "SetCustomModel");
 		g_iPlayerModelIndex[client] = -1;
 		
-		if(g_InThirdperson[client] == 1)
+		if(g_InThirdperson[client])
 		{
-			SwitchView(client, false, true);
-			
-			/*
-	if(g_iFov[client] != -1)
-			{
-				SetEntProp(client, Prop_Send, "m_iFOV", g_iFov[client]);
-				SetEntProp(client, Prop_Send, "m_iDefaultFOV", g_iDefFov[client]);
-				
-				g_iFov[client] = -1;
-				g_iDefFov[client] = -1;
-			}*/
+			SwitchView(client, false);
 			
 			g_IsPropModel[client] = 0;
 		}
@@ -309,9 +266,9 @@ public Hook_RoundStart(Handle:event, const String:name[], bool:dontBroadcast)
 		Colorize(x, NORMAL);
 		RemovePropModel(x);
 		
-		if(g_InThirdperson[x] == 1)
+		if(g_InThirdperson[x])
 		{
-			SwitchView(x, false, true);
+			SwitchView(x, false);
 		}
 	}
 	
@@ -399,65 +356,13 @@ public CreatePropPlayer(client)
 	//DeleteProps(client);
 	
 	g_IsPropModel[client] = 1;
-  Colorize(client, INVIS);
+    Colorize(client, INVIS);
 
 	SetVariantString(sPath);
 	AcceptEntityInput(client, "SetCustomModel");
 	SetVariantInt(1);
 	AcceptEntityInput(client, "SetCustomModelRotates");
 
-	//SetVariantBool(true);
-	//AcceptEntityInput(client, "SetCustomModelVisibletoSelf");
-
-	/*
-	g_PropModel[client] = CreateEntityByName("prop_dynamic_override");
-	if(g_PropModel[client] == -1)
-	{
-		ReplyToCommand(client, "Failed to create entity!");
-		LogMessage("[PB] %i Failed to create entity!", client);
-		return;
-	}
-
-	decl String:sPlayername[64];
-	Format(sPlayername, sizeof(sPlayername), "target%i", client);
-	DispatchKeyValue(client, "targetname", sPlayername);
-	
-	if(IsValidEntity(g_PropModel[client]))
-	{
-		DispatchKeyValue(g_PropModel[client],"model", sPath);
-		
-		DispatchKeyValue(g_PropModel[client], "disableshadows", "1");
-		
-		DispatchKeyValue(g_PropModel[client], "solid", "0");
-		
-		SetEntityMoveType(g_PropModel[client], MOVETYPE_NOCLIP);
-		
-		DispatchSpawn(g_PropModel[client]);			
-		
-		decl Float:origin[3], Float:angles[3];
-		GetClientAbsOrigin(client, origin);
-		GetClientAbsAngles(client, angles);
-		
-		origin[2] += 1.0;
-		if(StrEqual(sName, "Trashcan") || StrEqual(sName, "Weather Vane") || StrEqual(sName, "Wood Barrel"))
-		{
-			origin[2] += 29.0;
-		}
-		
-		//SetEntProp(g_PropModel[client], Prop_Data, "m_CollisionGroup", 5);
-		//SetEntProp(g_PropModel[client], Prop_Send, "m_CollisionGroup", 5);
-		
-		TeleportEntity(g_PropModel[client], origin, angles, NULL_VECTOR);					
-		
-		//SetVariantFloat(1.0);
-		//AcceptEntityInput(g_PropModel[client], "SetScale", g_PropModel[client], g_PropModel[client], 0);
-		
-		SetVariantString(sPlayername);
-		AcceptEntityInput(g_PropModel[client], "SetParent", g_PropModel[client], g_PropModel[client], 0);
-		
-		SetEntPropEnt(g_PropModel[client], Prop_Send, "m_hOwnerEntity", client);
-		*/
-	
 	//Print Model name info to client
 	PrintCenterText(client, "You are a %s!", sName);
 	if(g_thirdpersonCvar == 1)
@@ -487,9 +392,9 @@ PerformPropPlayer(client, target)
 		Colorize(target, NORMAL);
     RemovePropModel(target);
 		
-		if(g_InThirdperson[target] == 1)
+		if(g_InThirdperson[target])
 		{
-			SwitchView(target, false, true);
+			SwitchView(target, false);
 		}
 		
 		LogAction(client, target, "\"%L\" removed prop on \"%L\"", client, target);
@@ -510,13 +415,13 @@ public Action:Command_Thirdperson(client, args)
 
 	if(g_IsPropModel[client] != 0)
 	{
-		if(g_InThirdperson[client] == 0)
+		if(!g_InThirdperson[client])
 		{
-			SwitchView(client, true, false);
+			SwitchView(client, true);
 		}
 		else
 		{
-			SwitchView(client, false, true);
+			SwitchView(client, false);
 		}
 	}
 	else
@@ -527,68 +432,23 @@ public Action:Command_Thirdperson(client, args)
 	return Plugin_Handled;
 }
 
-stock SwitchView(target, bool:observer, bool:viewmodel)
+// Enables and disables third-person mode.
+// Source: https://forums.alliedmods.net/showthread.php?p=1694178?p=1694178
+SwitchView(target, bool:observer)
 {	
-	SetEntPropEnt(target, Prop_Send, "m_hObserverTarget", observer ? target : -1);
-	SetEntProp(target, Prop_Send, "m_iObserverMode", observer ? 1 : 0);
-	SetEntData(target, g_oFOV, observer ? 100 : GetEntData(target, g_oDefFOV, 4), 4, true);		
-	SetEntProp(target, Prop_Send, "m_bDrawViewmodel", viewmodel ? 1 : 0);
+    SetVariantInt(observer ? 1 : 0);
+	AcceptEntityInput(target, "SetForcedTauntCam");
 	
-	//SetVariantBool(observer);
-	//AcceptEntityInput(target, "SetCustomModelVisibletoSelf");
-	
-	if(g_InThirdperson[target] == 1)
+	if(g_InThirdperson[target] == true)
 	{
-		g_InThirdperson[target] = 0;
+		g_InThirdperson[target] = false;
 	}
 	else
 	{
-		g_InThirdperson[target] = 1;
+		g_InThirdperson[target] = true;
 	}
 }
 
-/*
-stock SwitchView(client)
-{
-	if(client)
-	{
-		if(IsPlayerAlive(client))
-		{
-			if(g_InThirdperson[client] == 0)
-			{
-				g_InThirdperson[client] = 1;
-				
-				g_iFov[client] = GetEntProp(client,Prop_Data,"m_iFOV");
-				g_iDefFov[client] = GetEntProp(client, Prop_Send, "m_iDefaultFOV");
-				
-				SetEntPropEnt(client, Prop_Send, "m_hObserverTarget", client);
-				SetEntProp(client, Prop_Send, "m_iObserverMode", 1);
-				SetEntProp(client, Prop_Send, "m_bDrawViewmodel", 0);
-				SetEntProp(client, Prop_Send, "m_iFOV", 100);
-				SetEntProp(client, Prop_Send, "m_iDefaultFOV", 100);
-		
-		SetVariantBool(true);
-		AcceptEntityInput(client, "SetCustomModelVisibletoSelf");			
-			}
-			else
-			{
-				g_InThirdperson[client] = 0;
-				SetEntPropEnt(client, Prop_Send, "m_hObserverTarget", -1);
-				SetEntProp(client, Prop_Send, "m_iObserverMode", 0);
-				SetEntProp(client, Prop_Send, "m_bDrawViewmodel", 1);
-				SetEntProp(client, Prop_Send, "m_iFOV", g_iFov[client]);
-				SetEntProp(client, Prop_Send, "m_iDefaultFOV", g_iDefFov[client]);
-				
-				g_iFov[client] = -1;
-				g_iDefFov[client] = -1;
-		
-		SetVariantBool(false);
-		AcceptEntityInput(client, "SetCustomModelVisibletoSelf");			
-			}
-		}
-	}
-}
-*/
 
 /*
 Credit to pheadxdll and FoxMulder for invisibility code.
@@ -611,7 +471,7 @@ public Colorize(client, color[4])
 	if(class == TFClass_DemoMan)
 	{
 		SetWearablesRGBA_Impl(client, "tf_wearable_item_demoshield", "CTFWearableItemDemoShield", color);
-		HideGlowingEyes(client, type);
+		SetGlowingEyes(client, type);
 	}
 
 	return;
@@ -633,12 +493,12 @@ SetWearablesRGBA_Impl(client,  const String:entClass[], const String:serverClass
 	}
 }
 
-HideGlowingEyes(client, type)
+SetGlowingEyes(client, bool:enable)
 {
 	new decapitations = GetEntProp(client, Prop_Send, "m_iDecapitations");
 	if(decapitations >= 1)
 	{
-		if(!type)
+		if(!enable)
 		{
 			//Removes Glowing Eye
 			TF2_RemoveCond(client, 18);
@@ -738,18 +598,11 @@ stock ProcessConfigFile()
 
 public SMCResult:Config_NewSection(Handle:parser, const String:section[], bool:quotes) 
 {
-	//LogMessage("In Section %s", section);
-	//PrintToChatAll("In Section %s", section);
 	return SMCParse_Continue;
 }
 
 public SMCResult:Config_KeyValue(Handle:parser, const String:key[], const String:value[], bool:key_quotes, bool:value_quotes)
 {
-	//LogMessage("Saving model name %s", key);
-	//LogMessage("Saving model path %s", value);
-	//PrintToChatAll("Saving model name %s", key);
-	//PrintToChatAll("Saving model path %s", value);
-	
 	PushArrayString(g_hModelNames, key);
 	PushArrayString(g_hModelPaths, value);
 	return SMCParse_Continue;
@@ -757,8 +610,6 @@ public SMCResult:Config_KeyValue(Handle:parser, const String:key[], const String
 
 public SMCResult:Config_EndSection(Handle:parser) 
 {	
-	//LogMessage("Leaving Section");
-	//PrintToChatAll("Leaving Section");
 	return SMCParse_Continue;
 }
 
@@ -928,36 +779,6 @@ SetupDefaultProplistFile()
 	CloseHandle(hKVBuildProplist);
 }
 
-/*
-stock DeleteModel(client)
-{	
-	new anime = GetAnimeEnt(client);
-	if(anime > 0 && IsValidEntity(anime))
-	{
-		AcceptEntityInput(anime, "kill");
-	}
-	if(anime > 0 && IsValidEdict(anime))
-	{
-		RemoveEdict(anime);
-		g_PropModel[client] = -1;
-	}
-}
-
-stock GetAnimeEnt(client)
-{
-	new client2, ent;
-	while(IsValidEntity(ent) && (ent = FindEntityByClassname(ent, "prop_dynamic")) != -1)
-	{
-		client2 = GetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity");
-		if(client2 == client)
-		{
-			return ent;
-		}
-	}
-	return -1;
-}
-*/
-
 stock StripWeapons(client) 
 {
 	if(IsClientInGame(client) && IsPlayerAlive(client)) 
@@ -988,22 +809,6 @@ stock RemovePropModel(client)
 		g_iPlayerModelIndex[client] = -1;
 	}
 }
-
-/*
-stock DeleteProps(client)
-{
-	if(g_PropModel[client] != -1)
-	{
-		if(IsValidEntity(g_PropModel[client]))
-		{
-			//PrintToChatAll("%i IsValidEntity, AcceptEntityInput KILL entity", client);
-			//PrintToServer("%i IsValidEntity, AcceptEntityInput KILL entity", client);
-			AcceptEntityInput(g_PropModel[client], "kill");
-			g_PropModel[client] = -1;
-		}
-	}
-}
-*/
 
 CheckGame()
 {
@@ -1082,8 +887,6 @@ stock bool:IsEntLimitReached()
 		
 	}
 	
-	//PrintToChatAll("%Entity Count: %i", c);
-	
 	if (c >= (maxents-32))
 	{
 		PrintToServer("Warning: Entity limit is nearly reached! Please switch or reload the map!");
@@ -1113,9 +916,9 @@ public Cvars_Changed(Handle:convar, const String:oldValue[], const String:newVal
 					{
 						RemovePropModel(x);
 					}
-					if(g_InThirdperson[x] == 1)
+					if(g_InThirdperson[x])
 					{
-						SwitchView(x, false, true);
+						SwitchView(x, false);
 					}
 				}
 			}
