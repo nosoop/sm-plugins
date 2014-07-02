@@ -19,7 +19,7 @@
 #include <adminmenu>
 
 // Plugin version.
-#define PLUGIN_VERSION "1.7.1"
+#define PLUGIN_VERSION "1.7.2"
 
 // Default prop command name.
 #define PROP_COMMAND            "sm_prop"
@@ -51,8 +51,6 @@ new Handle:Cvar_HitRemoveProp = INVALID_HANDLE;
 new Handle:Cvar_Announcement = INVALID_HANDLE;
 new Handle:Cvar_Respawnplayer = INVALID_HANDLE;
 
-new Handle:Cvar_PropSpeed = INVALID_HANDLE;
-
 // Arrays for prop models, names, and an list of additional files to load.
 new Handle:g_hModelNames = INVALID_HANDLE;
 new Handle:g_hModelPaths = INVALID_HANDLE;
@@ -65,6 +63,7 @@ new g_announcementCvar;
 new g_respawnplayerCvar;
 new g_winnerTeam;
 
+new Handle:Cvar_PropSpeed = INVALID_HANDLE;
 new g_iPropSpeed;
 
 // Boolean flags for prop functions.
@@ -100,7 +99,7 @@ public OnPluginStart() {
     HookConVarChange(Cvar_Enabled, Cvars_Changed);
     
     // sm_propbonus_adminonly
-    Cvar_AdminOnly = CreateConVar("sm_propbonus_adminonly", "0", "Enable plugin for admins only? (1/0 = yes/no)");
+    Cvar_AdminOnly = CreateConVar("sm_propbonus_adminonly", "0", "Enable plugin for admins only?");
     HookConVarChange(Cvar_AdminOnly, Cvars_Changed);
     
     // sm_propbonus_flag
@@ -121,7 +120,7 @@ public OnPluginStart() {
     // sm_propbonus_respawndead
     Cvar_Respawnplayer = CreateConVar("sm_propbonus_respawndead", "0", "Respawn dead players at start of bonusround?");
     HookConVarChange(Cvar_Respawnplayer, Cvars_Changed);
-
+    
     // Prop speed.
     Cvar_PropSpeed = CreateConVar("sm_propbonus_forcespeed", "0", "Force all props to a specific speed, in an integer representing HU/s.  Setting this to 0 allows props to move at default speed.");
     HookConVarChange(Cvar_PropSpeed, Cvars_Changed);
@@ -301,25 +300,27 @@ public Action:Timer_EquipProps(Handle:timer) {
         if(GetClientTeam(x) == g_winnerTeam) {
             continue;
         }
-        
-        if(!IsPlayerAlive(x)) {
-            if(g_respawnplayerCvar) {
-                TF2_RespawnPlayer(x);
-                SetThirdPerson(x, true);
-            } else {
-                continue;
-            }
-        }
-        
+                
         //If player is already a prop, skip id.
         if(g_bIsProp[x]) {
             continue;
         }
         
         //If admin only cvar is enabled and not admin, skip id.
-        if((g_adminonlyCvar && !g_bIsPlayerAdmin[x])) {
+        if (g_adminonlyCvar && !g_bIsPlayerAdmin[x]) {
             continue;
         }
+        
+        if (!IsPlayerAlive(x)) {
+            if (g_respawnplayerCvar) {
+                TF2_RespawnPlayer(x);
+                PropPlayer(x);
+                
+                SetThirdPerson(client, true, true);
+            }
+            continue;
+        }
+
         
         if(IsPlayerAlive(x)) {
             PropPlayer(x);
@@ -422,13 +423,13 @@ PerformPropPlayer(client, target, bool:bShowActivity = true) {
         PropPlayer(target);
         LogAction(client, target, "\"%L\" set prop on \"%L\"", client, target);
         if (bShowActivity) {
-            ShowActivity(client, " Set prop on %N", target);
+            ShowActivity(client, "Set prop on %N", target);
         }
     } else {
         UnpropPlayer(target, true);
         LogAction(client, target, "\"%L\" removed prop on \"%L\"", client, target);
         if (bShowActivity) {
-            ShowActivity(client, " Removed prop on %N", target);
+            ShowActivity(client, "Removed prop on %N", target);
         }
     }
 }
@@ -454,11 +455,24 @@ public Action:Command_Thirdperson(client, args) {
 
 // Enables and disables third-person mode.
 // Source: https://forums.alliedmods.net/showthread.php?p=1694178?p=1694178
-SetThirdPerson(target, bool:bEnabled) {
-    SetVariantInt(bEnabled ? 1 : 0);
-    AcceptEntityInput(target, "SetForcedTauntCam");
+// TODO Option to spoof cheats and thirdperson on a client that spawns post-round end?
+SetThirdPerson(client, bool:bEnabled, bool:bSpoofCheats = false) {
+    if (!g_bIsProp[client]) {
+        return;
+    }
     
-    g_bIsInThirdperson[target] = bEnabled;
+    SetVariantInt(bEnabled ? 1 : 0);
+    AcceptEntityInput(client, "SetForcedTauntCam");
+    
+    if (bSpoofCheats && bEnabled) {
+        if (SendConVarValue(client, FindConVar("sv_cheats"), "1")) {
+            LogMessage("Successfully spoofed cheats on client %d.", client);
+            ClientCommand(client, "thirdperson");
+            SendConVarValue(client, FindConVar("sv_cheats"), "0");
+        }
+    }
+    
+    g_bIsInThirdperson[client] = bEnabled;
 }
 
 // Global forward to test if a client wants to enable proplock.
