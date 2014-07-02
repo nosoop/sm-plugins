@@ -18,7 +18,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION "1.5.0"
+#define PLUGIN_VERSION "1.6.0"
 
 #define INVIS					{255,255,255,0}
 #define NORMAL					{255,255,255,255}
@@ -34,17 +34,18 @@ new Handle:Cvar_Enabled = INVALID_HANDLE;
 new Handle:Cvar_HitRemoveProp = INVALID_HANDLE;
 new Handle:Cvar_Announcement = INVALID_HANDLE;
 new Handle:Cvar_Respawnplayer = INVALID_HANDLE;
-new Handle:g_hModelNames = INVALID_HANDLE;
-new Handle:g_hModelPaths = INVALID_HANDLE;
 
 new Handle:Cvar_PropSpeed = INVALID_HANDLE;
+
+// Base models.
+new Handle:g_hModelNames = INVALID_HANDLE;
+new Handle:g_hModelPaths = INVALID_HANDLE;
 
 new g_adminonlyCvar;
 new g_thirdpersonCvar;
 new g_hitremovePropCvar;
 new g_announcementCvar;
 new g_respawnplayerCvar;
-new g_iArraySize;
 new g_winnerTeam;
 
 new g_iPropSpeed;
@@ -165,7 +166,7 @@ public OnClientDisconnect(client) {
 }
 
 public OnMapStart() {
-    //Process the models data file and make sure it exists. If not, create default.
+    //Process the base models data file and make sure it exists, creating a default as necessary.
     ProcessConfigFile();
 
     //Precache all models and names.
@@ -173,7 +174,7 @@ public OnMapStart() {
     for(new i = 0; i < GetArraySize(g_hModelNames); i++) {
         GetArrayString(g_hModelPaths, i, sPath, sizeof(sPath));
         PrecacheModel(sPath, true);
-    } 
+    }
 }
 
 public Action:Command_Propplayer(client, args) {
@@ -318,7 +319,9 @@ public Action:Timer_EquipProps(Handle:timer) {
 
 // Turns a client into a prop.  Return value is the index value of the prop selected.
 PropPlayer(client) {
-    new iModelIndex = GetRandomInt(0, g_iArraySize);
+    // GetRandomInt is inclusive.
+    new iModelIndex = GetRandomInt(0, GetArraySize(g_hModelNames) - 1);
+    
     new String:sPath[PLATFORM_MAX_PATH], String:sName[128];
     GetArrayString(g_hModelNames, iModelIndex, sName, sizeof(sName));
     GetArrayString(g_hModelPaths, iModelIndex, sPath, sizeof(sPath));
@@ -610,6 +613,7 @@ stock ProcessConfigFile() {
         }
     }
     
+    // Create arrays if they are nonexistent.
     if (g_hModelNames == INVALID_HANDLE) {
         g_hModelNames = CreateArray(128, 0);
         g_hModelPaths = CreateArray(PLATFORM_MAX_PATH, 0);
@@ -629,12 +633,44 @@ stock ProcessConfigFile() {
     
     if (result != SMCError_Okay) {
         SMC_GetErrorString(result, error, sizeof(error));
-        LogError("[propbonus] %s on line %d, col %d of %s", error, line, col, g_sConfigPath);
-        LogError("[propbonus] Propbonus is not running! Failed to parse %s", g_sConfigPath);
+        LogError("%s on line %d, col %d of %s", error, line, col, g_sConfigPath);
+        LogError("Propbonus is not running! Failed to parse %s", g_sConfigPath);
         SetFailState("Could not parse file %s", g_sConfigPath);
     }
 
-    g_iArraySize = GetArraySize(g_hModelNames) - 1;
+    new iArraySize = GetArraySize(g_hModelNames);
+    LogMessage("%d props loaded from base file.", iArraySize);
+    
+    // Load models from the map-specific configuration.
+    // TODO Add ability to drop them into one file?
+    new String:sConfigPath[PLATFORM_MAX_PATH];
+    
+    new String:mapName[64];
+    GetCurrentMap(mapName, sizeof(mapName));
+
+    new String:mapFilePath[128];
+    Format(mapFilePath, sizeof(mapFilePath), "data/propbonusround_models/%s.txt", mapName);
+    BuildPath(Path_SM, sConfigPath, sizeof(sConfigPath), mapFilePath);
+    
+    if (FileExists(sConfigPath)) {
+        new Handle:hMapParser = SMC_CreateParser();
+        SMC_SetReaders(hMapParser, Config_NewSection, Config_KeyValue, Config_EndSection);
+        SMC_SetParseEnd(hMapParser, Config_End);
+
+        new SMCError:mapResult = SMC_ParseFile(hMapParser, sConfigPath, line, col);
+        CloseHandle(hMapParser);
+        
+        if (mapResult != SMCError_Okay) {
+            SMC_GetErrorString(mapResult, error, sizeof(error));
+            LogError("%s on line %d, col %d of %s", error, line, col, sConfigPath);
+            LogError("Failed to parse map-specific proplist %s.", sConfigPath);
+        }
+    } else {
+        LogMessage("Could not find map-specific proplist %s.", sConfigPath);
+    }
+
+    new iMapArraySize = GetArraySize(g_hModelNames);
+    LogMessage("%d props loaded from map-specific list for %s.", iMapArraySize - iArraySize, mapName);
 }
 
 public SMCResult:Config_NewSection(Handle:parser, const String:section[], bool:quotes) {
