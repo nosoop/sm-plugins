@@ -17,7 +17,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION "1.3.2"
+#define PLUGIN_VERSION "1.3.3"
 
 #define INVIS					{255,255,255,0}
 #define NORMAL					{255,255,255,255}
@@ -45,7 +45,6 @@ new g_winnerTeam;
 new bool:g_InThirdperson[MAXPLAYERS+1] = { false, ... };
 new bool:g_bIsPropLocked[MAXPLAYERS+1] = { false, ... };
 new bool:g_bRecentlySetPropLock[MAXPLAYERS+1] = { false, ... };
-
 new bool:g_bIsProp[MAXPLAYERS+1] = { false, ... };
 new g_iPlayerModelIndex[MAXPLAYERS+1] = { -1, ... };
 
@@ -379,11 +378,7 @@ public Action:Command_Thirdperson(client, args) {
 
     if(g_bIsProp[client]) {
         // Toggle thirdperson mode on props.
-        if(!g_InThirdperson[client]) {
-            SetThirdPerson(client, true);
-        } else {
-            SetThirdPerson(client, false);
-        }
+        SetThirdPerson(client, !g_InThirdperson[client]);
     } else {
         ReplyToCommand(client, "[SM] You must be a PROP to use thirdperson.");
     }
@@ -408,38 +403,49 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
         if ((buttons & IN_ATTACK) == IN_ATTACK) {
             if (!g_bRecentlySetPropLock[client]) {
                 // Toggle proplock state.
-                g_bIsPropLocked[client] = !g_bIsPropLocked[client];
-                
-                // Disable ability to rotate model when proplock is enabled.
-                SetVariantInt(g_bIsPropLocked[client] ? 0 : 1);
-                AcceptEntityInput(client, "SetCustomModelRotates");
-                
-                // Almost disable all movement if proplock is enabled.
-                if (g_bIsPropLocked[client]) {
-                    SetEntPropFloat(client, Prop_Send, "m_flMaxspeed", 1.0);
-                } else {
-                    // Stunning the player resets their speed to default.
-                    TF2_StunPlayer(client, 0.0, 0.0, TF_STUNFLAG_SLOWDOWN);
-                }
-                
-                // Show hint text.
-                PrintHintText(client, "%s prop lock.", g_bIsPropLocked[client] ? "Enabled" : "Disabled");
+                SetPropLockState(client, !g_bIsPropLocked[client]);
                 
                 // Lock in the proplock settings, as this will be run while +attack is held.
                 g_bRecentlySetPropLock[client] = true;
                 CreateTimer(1.0, UnsetPropLockToggleDelay, client);
             }
-            return Plugin_Handled;
         }
         
-        // +jump is disabled when prop is locked.
+        // Remove prop lock state on jump if in it.
+        // It looks better than blocking the jump and the view being weird client-side.
+        // An alternative option is to set gravity up stupidly high.
         if ((buttons & IN_JUMP) == IN_JUMP) {
             if (g_bIsPropLocked[client]) {
-                return Plugin_Handled;
+                SetPropLockState(client, false);
             }
         }
     }
     return Plugin_Continue;
+}
+
+// Sets prop locked state on a client.
+SetPropLockState(client, bool:bPropLocked) {
+    if (!g_bIsProp[client])
+        return;
+
+    // Disable ability to rotate model when proplock is enabled.
+    SetVariantInt(bPropLocked ? 0 : 1);
+    AcceptEntityInput(client, "SetCustomModelRotates");
+    
+    // Almost disable all movement if proplock is enabled.
+    if (bPropLocked) {
+        SetEntPropFloat(client, Prop_Send, "m_flMaxspeed", 1.0);
+    } else {
+        // Stunning the player resets their speed to default.
+        TF2_StunPlayer(client, 0.0, 0.0, TF_STUNFLAG_SLOWDOWN);
+    }
+    
+    // Show hint text if toggling state in case.
+    if (g_bIsPropLocked[client] != bPropLocked)
+        PrintHintText(client, "%s prop lock.", bPropLocked ? "Enabled" : "Disabled");
+    
+    // Update global state.
+    g_bIsPropLocked[client] = bPropLocked;
 }
 
 public Action:UnsetPropLockToggleDelay(Handle:timer, any:client) {
