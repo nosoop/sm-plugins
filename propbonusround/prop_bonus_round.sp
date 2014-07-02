@@ -19,7 +19,10 @@
 #include <adminmenu>
 
 // Plugin version.
-#define PLUGIN_VERSION "1.7.0"
+#define PLUGIN_VERSION "1.7.1"
+
+// Default prop command name.
+#define PROP_COMMAND            "sm_prop"
 
 // RGBA values for item coloration, as a fallback.
 #define INVIS					{255,255,255,0}
@@ -31,7 +34,12 @@
 
 // Base configuration file.
 #define PROPCONFIG_BASE         "base"
+
+// Key in the proplist whose value contains a space-delimited list of files to import.
 #define INCLUDE_PROPLIST_KEY    "#include"
+
+// The maximum length of a prop name.  32 characters should be enough for all cases.
+#define PROPNAME_LENGTH         32
 
 new Handle:hAdminMenu = INVALID_HANDLE;
 new Handle:Cvar_AdminFlag = INVALID_HANDLE;
@@ -45,7 +53,7 @@ new Handle:Cvar_Respawnplayer = INVALID_HANDLE;
 
 new Handle:Cvar_PropSpeed = INVALID_HANDLE;
 
-// Arrays for prop models and names.
+// Arrays for prop models, names, and an list of additional files to load.
 new Handle:g_hModelNames = INVALID_HANDLE;
 new Handle:g_hModelPaths = INVALID_HANDLE;
 new Handle:g_hIncludePropLists = INVALID_HANDLE;
@@ -59,19 +67,19 @@ new g_winnerTeam;
 
 new g_iPropSpeed;
 
-new bool:g_InThirdperson[MAXPLAYERS+1] = { false, ... };
+// Boolean flags for prop functions.
+new bool:g_bIsProp[MAXPLAYERS+1] = { false, ... };
+new bool:g_bIsInThirdperson[MAXPLAYERS+1] = { false, ... };
 new bool:g_bIsPropLocked[MAXPLAYERS+1] = { false, ... };
 new bool:g_bRecentlySetPropLock[MAXPLAYERS+1] = { false, ... };
-new bool:g_bIsProp[MAXPLAYERS+1] = { false, ... };
 
-new bool:bIsPlayerAdmin[MAXPLAYERS + 1] = { false, ... };
+new bool:g_bIsPlayerAdmin[MAXPLAYERS + 1] = { false, ... };
 new bool:g_bIsEnabled = true;
 new bool:g_bBonusRound = false;
 
 new String:g_sCharAdminFlag[32];
 
-public Plugin:myinfo = 
-{
+public Plugin:myinfo = {
     name = "Prop Bonus Round",
     author = "retsam (www.multiclangaming.net), nosoop",
     description = "Turns the losing team into random props during bonus round!",
@@ -99,19 +107,19 @@ public OnPluginStart() {
     Cvar_AdminFlag = CreateConVar("sm_propbonus_flag", "b", "Admin flag to use if adminonly is enabled (only one).  Must be a in char format.");
     
     // sm_propbonus_allowtriggers
-    Cvar_ThirdPerson = CreateConVar("sm_propbonus_allowtriggers", "0", "Allow prop players thirdperson triggers?(1/0 = yes/no)");
+    Cvar_ThirdPerson = CreateConVar("sm_propbonus_allowtriggers", "0", "Allow prop players thirdperson triggers?");
     HookConVarChange(Cvar_ThirdPerson, Cvars_Changed);
 
     // sm_propbonus_announcement
-    Cvar_Announcement = CreateConVar("sm_propbonus_announcement", "1", "Public announcement msg at start of bonus round?(1/0 = yes/no)");
+    Cvar_Announcement = CreateConVar("sm_propbonus_announcement", "1", "Public announcement msg at start of bonus round?");
     HookConVarChange(Cvar_Announcement, Cvars_Changed);
 
     // sm_propbonus_removeproponhit
-    Cvar_HitRemoveProp = CreateConVar("sm_propbonus_removeproponhit", "0", "Remove player prop once they take damage?(1/0 = yes/no)");
+    Cvar_HitRemoveProp = CreateConVar("sm_propbonus_removeproponhit", "0", "Remove player prop once they take damage?");
     HookConVarChange(Cvar_HitRemoveProp, Cvars_Changed);
 
     // sm_propbonus_respawndead
-    Cvar_Respawnplayer = CreateConVar("sm_propbonus_respawndead", "0", "Respawn dead players at start of bonusround?(1/0 = yes/no)");
+    Cvar_Respawnplayer = CreateConVar("sm_propbonus_respawndead", "0", "Respawn dead players at start of bonusround?");
     HookConVarChange(Cvar_Respawnplayer, Cvars_Changed);
 
     // Prop speed.
@@ -122,7 +130,7 @@ public OnPluginStart() {
     Cvar_ThirdTriggers = CreateConVar("sm_propbonus_triggers", "tp,third", "SM command triggers for thirdperson - Separated by commas. Each will have the !third, /third, sm_third associated with it.");
     
     // Command to prop a player.
-    RegAdminCmd("sm_prop", Command_Propplayer, ADMFLAG_BAN, "sm_prop <#userid|name> - toggles prop on a player");
+    RegAdminCmd(PROP_COMMAND, Command_Propplayer, ADMFLAG_BAN, "sm_prop <#userid|name> - toggles prop on a player");
 
     // Hook round events to set and unset props.
     HookEvent("teamplay_round_start", Hook_RoundStart, EventHookMode_Post);
@@ -143,13 +151,9 @@ public OnPluginStart() {
 }
 
 public OnClientPostAdminCheck(client) {
-    if(IsValidAdmin(client, g_sCharAdminFlag)) {
-        bIsPlayerAdmin[client] = true;
-    } else {
-        bIsPlayerAdmin[client] = false;
-    }
+    g_bIsPlayerAdmin[client] = IsValidAdmin(client, g_sCharAdminFlag);
 
-    g_InThirdperson[client] = false;
+    g_bIsInThirdperson[client] = false;
     g_bIsProp[client] = false;
 }
 
@@ -168,16 +172,16 @@ public OnConfigsExecuted() {
 
 // Client disconnect - unset client prop settings.
 public OnClientDisconnect(client) {
-    g_InThirdperson[client] = false;
+    g_bIsInThirdperson[client] = false;
     g_bIsProp[client] = false;
     g_bIsPropLocked[client] = false;
 }
 
 public OnMapStart() {
-    //Process the base models data file and make sure it exists, creating a default as necessary.
+    // Reload the prop listings.
     ProcessConfigFile();
 
-    //Precache all models and names.
+    //Precache all models.
     decl String:sPath[100];
     for(new i = 0; i < GetArraySize(g_hModelNames); i++) {
         GetArrayString(g_hModelPaths, i, sPath, sizeof(sPath));
@@ -275,7 +279,6 @@ public Hook_RoundWin(Handle:event, const String:name[], bool:dontBroadcast) {
         return;
 
     g_bBonusRound = true;
-
     g_winnerTeam = GetEventInt(event, "team");
     
     if(!IsEntLimitReached()) {
@@ -314,7 +317,7 @@ public Action:Timer_EquipProps(Handle:timer) {
         }
         
         //If admin only cvar is enabled and not admin, skip id.
-        if((g_adminonlyCvar && !bIsPlayerAdmin[x])) {
+        if((g_adminonlyCvar && !g_bIsPlayerAdmin[x])) {
             continue;
         }
         
@@ -330,7 +333,7 @@ PropPlayer(client) {
     // GetRandomInt is inclusive.
     new iModelIndex = GetRandomInt(0, GetArraySize(g_hModelNames) - 1);
     
-    new String:sPath[PLATFORM_MAX_PATH], String:sName[128];
+    new String:sPath[PLATFORM_MAX_PATH], String:sName[PROPNAME_LENGTH];
     GetArrayString(g_hModelNames, iModelIndex, sName, sizeof(sName));
     GetArrayString(g_hModelPaths, iModelIndex, sPath, sizeof(sPath));
     
@@ -372,11 +375,12 @@ PropPlayer(client) {
 }
 
 // Turns a client into a not-prop.
+// The only reason to respawn them is to return weapons to them on unprop (in the case of toggling).
 UnpropPlayer(client, bool:respawn = false) {
     Colorize(client, NORMAL);
     RemovePropModel(client);
     
-    if(g_InThirdperson[client])	{
+    if(g_bIsInThirdperson[client])	{
         SetThirdPerson(client, false);
     }
     
@@ -440,7 +444,7 @@ public Action:Command_Thirdperson(client, args) {
 
     if(g_bIsProp[client]) {
         // Toggle thirdperson mode on props.
-        SetThirdPerson(client, !g_InThirdperson[client]);
+        SetThirdPerson(client, !g_bIsInThirdperson[client]);
     } else {
         ReplyToCommand(client, "[SM] You must be a prop to use thirdperson.");
     }
@@ -454,7 +458,7 @@ SetThirdPerson(target, bool:bEnabled) {
     SetVariantInt(bEnabled ? 1 : 0);
     AcceptEntityInput(target, "SetForcedTauntCam");
     
-    g_InThirdperson[target] = bEnabled;
+    g_bIsInThirdperson[target] = bEnabled;
 }
 
 // Global forward to test if a client wants to enable proplock.
@@ -609,7 +613,7 @@ stock TF2_RemoveCond(client, cond) {
 stock ProcessConfigFile() {
     // Create arrays if they are nonexistent.
     if (g_hModelNames == INVALID_HANDLE) {
-        g_hModelNames = CreateArray(128, 0);
+        g_hModelNames = CreateArray(PROPNAME_LENGTH, 0);
         g_hModelPaths = CreateArray(PLATFORM_MAX_PATH, 0);
         g_hIncludePropLists = CreateArray(PLATFORM_MAX_PATH, 0);
     }
@@ -648,7 +652,7 @@ ReadPropConfigurationFile(String:fileName[]) {
     Format(mapFilePath, sizeof(mapFilePath), "data/propbonusround/%s.txt", fileName);
     BuildPath(Path_SM, sConfigPath, sizeof(sConfigPath), mapFilePath);
 
-    if (!FileExists(sConfigPath) && strcmp(fileName, PROPCONFIG_BASE) == 0) {
+    if (!FileExists(sConfigPath) && StrEqual(fileName, PROPCONFIG_BASE)) {
         // Config file does not exist. Re-create the file before precache.
         LogMessage("Models file not found at %s. Auto-creating file...", mapFilePath);
         
@@ -682,7 +686,7 @@ ReadPropConfigurationFile(String:fileName[]) {
             LogError("%s on line %d, col %d of %s", error, line, col, sConfigPath);
             LogError("Failed to parse proplist %s.", sConfigPath);
             
-            if (strcmp(fileName, PROPCONFIG_BASE) == 0) {
+            if (StrEqual(fileName, PROPCONFIG_BASE)) {
                 SetFailState("Could not parse file %s", sConfigPath);
             }
         }
@@ -697,7 +701,7 @@ public SMCResult:Config_NewSection(Handle:parser, const String:section[], bool:q
 
 public SMCResult:Config_KeyValue(Handle:parser, const String:key[], const String:value[], bool:key_quotes, bool:value_quotes) {
     // If the key is an #include, add to the list.
-    if (strcmp(key, INCLUDE_PROPLIST_KEY) == 0) {
+    if (StrEqual(key, INCLUDE_PROPLIST_KEY)) {
         // Split the value by using spaces.
         new String:sImportLists[16][PLATFORM_MAX_PATH];
         ExplodeString(value, " ", sImportLists, sizeof(sImportLists), sizeof(sImportLists[]));
@@ -741,14 +745,14 @@ public OnAdminMenuReady(Handle:topmenu) {
     new TopMenuObject:player_commands = FindTopMenuCategory(hAdminMenu, ADMINMENU_PLAYERCOMMANDS);
 
     if (player_commands != INVALID_TOPMENUOBJECT) {
-        AddToTopMenu(hAdminMenu, "sm_propplayer", TopMenuObject_Item, AdminMenu_Propplayer, player_commands, "sm_propplayer", ADMFLAG_ROOT);
+        AddToTopMenu(hAdminMenu, PROP_COMMAND, TopMenuObject_Item, AdminMenu_Propplayer, player_commands, PROP_COMMAND, ADMFLAG_ROOT);
     }
 }
 
 public AdminMenu_Propplayer( Handle:topmenu, TopMenuAction:action, TopMenuObject:object_id, param, String:buffer[], maxlength ) {
     if (action == TopMenuAction_DisplayOption) {
         Format(buffer, maxlength, "Prop player");
-    } else if( action == TopMenuAction_SelectOption) {
+    } else if (action == TopMenuAction_SelectOption) {
         DisplayPlayerMenu(param);
     }
 }
@@ -799,36 +803,15 @@ SetupDefaultProplistFile(String:sConfigPath[]) {
     new Handle:hKVBuildProplist = CreateKeyValues("propbonusround");
 
     KvJumpToKey(hKVBuildProplist, "proplist", true);
-    KvSetString(hKVBuildProplist, "Oildrum", "models/props_2fort/oildrum.mdl");
-    KvSetString(hKVBuildProplist, "Barricade Sign", "models/props_gameplay/sign_barricade001a.mdl");
-    KvSetString(hKVBuildProplist, "Stack of Tires", "models/props_2fort/tire002.mdl");
     KvSetString(hKVBuildProplist, "Dynamite Crate", "models/props_2fort/miningcrate001.mdl");
-    KvSetString(hKVBuildProplist, "Control Point", "models/props_gameplay/cap_point_base.mdl");
     KvSetString(hKVBuildProplist, "Metal Bucket", "models/props_2fort/metalbucket001.mdl");
-    KvSetString(hKVBuildProplist, "Lantern", "models/props_2fort/lantern001_off.mdl");
-    KvSetString(hKVBuildProplist, "Stack of Trainwheels", "models/props_2fort/trainwheel003.mdl");
     KvSetString(hKVBuildProplist, "Milk Jug", "models/props_2fort/milkjug001.mdl");
     KvSetString(hKVBuildProplist, "Mop and Bucket", "models/props_2fort/mop_and_bucket.mdl");
-    KvSetString(hKVBuildProplist, "Propane Tank", "models/props_2fort/propane_tank_tall01.mdl");
     KvSetString(hKVBuildProplist, "Cow Cutout", "models/props_2fort/cow001_reference.mdl");
-    KvSetString(hKVBuildProplist, "Biohazard Barrel", "models/props_badlands/barrel01.mdl");
     KvSetString(hKVBuildProplist, "Wood Pallet", "models/props_farm/pallet001.mdl");
     KvSetString(hKVBuildProplist, "Hay Patch", "models/props_farm/haypile001.mdl");
-    KvSetString(hKVBuildProplist, "Shrub", "models/props_forest/shrub_03b.mdl");
-    KvSetString(hKVBuildProplist, "Wood Pile", "models/props_farm/wood_pile.mdl");
-    KvSetString(hKVBuildProplist, "Welding Machine", "models/props_farm/welding_machine01.mdl");
-    KvSetString(hKVBuildProplist, "Giant Cactus", "models/props_foliage/cactus01.mdl");
-    KvSetString(hKVBuildProplist, "Tree", "models/props_foliage/tree01.mdl");
-    KvSetString(hKVBuildProplist, "Spike Plant", "models/props_foliage/spikeplant01.mdl");
     KvSetString(hKVBuildProplist, "Grain Sack", "models/props_granary/grain_sack.mdl");
-    KvSetString(hKVBuildProplist, "Traffic Cone", "models/props_gameplay/orange_cone001.mdl");
-    KvSetString(hKVBuildProplist, "Milk Crate", "models/props_forest/milk_crate.mdl");
-    KvSetString(hKVBuildProplist, "Rock", "models/props_nature/rock_worn001.mdl");
-    KvSetString(hKVBuildProplist, "Computer Cart", "models/props_well/computer_cart01.mdl");
     KvSetString(hKVBuildProplist, "Skull Sign", "models/props_mining/sign001.mdl");
-    KvSetString(hKVBuildProplist, "Wood Fence", "models/props_mining/fence001_reference.mdl");
-    KvSetString(hKVBuildProplist, "Hay Bale", "models/props_gameplay/haybale.mdl");
-    KvSetString(hKVBuildProplist, "Water Cooler", "models/props_spytech/watercooler.mdl");
     KvSetString(hKVBuildProplist, "Terminal Chair", "models/props_spytech/terminal_chair.mdl");
 
     KvRewind(hKVBuildProplist);			
@@ -841,7 +824,6 @@ SetupDefaultProplistFile(String:sConfigPath[]) {
 StripWeapons(client) {
     if(IsClientInGame(client) && IsPlayerAlive(client)) {
         TF2_RemoveAllWeapons(client);
-        TF2_RemoveWeaponSlot(client, 8);
     }
 }
 
