@@ -18,12 +18,20 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION "1.6.0"
+// Plugin version.
+#define PLUGIN_VERSION "1.7.0"
 
+// RGBA values for item coloration, as a fallback.
 #define INVIS					{255,255,255,0}
 #define NORMAL					{255,255,255,255}
 
-#define DEFAULT_PROP_SPEED      0
+// Special value of sm_propbonus_forcespeed that disables the speed override.
+// Do not change, as it so happens that a speed of 0 does not work anywhere else.
+#define PROP_NO_CUSTOM_SPEED    0
+
+// Base configuration file.
+#define PROPCONFIG_BASE         "base"
+#define INCLUDE_PROPLIST_KEY    "#include"
 
 new Handle:hAdminMenu = INVALID_HANDLE;
 new Handle:Cvar_AdminFlag = INVALID_HANDLE;
@@ -37,9 +45,10 @@ new Handle:Cvar_Respawnplayer = INVALID_HANDLE;
 
 new Handle:Cvar_PropSpeed = INVALID_HANDLE;
 
-// Base models.
+// Arrays for prop models and names.
 new Handle:g_hModelNames = INVALID_HANDLE;
 new Handle:g_hModelPaths = INVALID_HANDLE;
+new Handle:g_hIncludePropLists = INVALID_HANDLE;
 
 new g_adminonlyCvar;
 new g_thirdpersonCvar;
@@ -59,7 +68,6 @@ new bool:bIsPlayerAdmin[MAXPLAYERS + 1] = { false, ... };
 new bool:g_bIsEnabled = true;
 new bool:g_bBonusRound = false;
 
-new String:g_sConfigPath[PLATFORM_MAX_PATH];
 new String:g_sCharAdminFlag[32];
 
 public Plugin:myinfo = 
@@ -348,7 +356,7 @@ PropPlayer(client) {
     RemoveWearables(client);
     
     // Force prop speed.
-    if (g_iPropSpeed != DEFAULT_PROP_SPEED) {
+    if (g_iPropSpeed != PROP_NO_CUSTOM_SPEED) {
         SetEntPropFloat(client, Prop_Send, "m_flMaxspeed", float(g_iPropSpeed));
     }
 
@@ -491,7 +499,7 @@ SetPropLockState(client, bool:bPropLocked) {
         SetEntPropFloat(client, Prop_Send, "m_flMaxspeed", 1.0);
     } else {
         // Override speed again if needed.
-        if (g_iPropSpeed != DEFAULT_PROP_SPEED) {
+        if (g_iPropSpeed != PROP_NO_CUSTOM_SPEED) {
             SetEntPropFloat(client, Prop_Send, "m_flMaxspeed", float(g_iPropSpeed));
         } else {
             // Stunning the player resets their speed to default.
@@ -599,78 +607,88 @@ stock TF2_RemoveCond(client, cond) {
 
 // Credit for SMC Parser related code goes to Antithasys!
 stock ProcessConfigFile() {
-    BuildPath(Path_SM, g_sConfigPath, sizeof(g_sConfigPath), "data/propbonusround_models.txt");
-    
-    // Model file checks. Auto-create or disable if necessary.
-    if (!FileExists(g_sConfigPath)) {
-        // Config file does not exist. Re-create the file before precache.
-        LogMessage("Models file not found at %s. Auto-creating file...", g_sConfigPath);
-        SetupDefaultProplistFile();
-        
-        if (!FileExists(g_sConfigPath)) {
-            // Second fail-safe check. Somehow, the file did not get created, so it is disable time.
-            SetFailState("Models file (propbonusround_models.txt) still not found.");
-        }
-    }
-    
     // Create arrays if they are nonexistent.
     if (g_hModelNames == INVALID_HANDLE) {
         g_hModelNames = CreateArray(128, 0);
         g_hModelPaths = CreateArray(PLATFORM_MAX_PATH, 0);
+        g_hIncludePropLists = CreateArray(PLATFORM_MAX_PATH, 0);
     }
 
     ClearArray(g_hModelNames);
     ClearArray(g_hModelPaths);
 
-    new Handle:hParser = SMC_CreateParser();
-    SMC_SetReaders(hParser, Config_NewSection, Config_KeyValue, Config_EndSection);
-    SMC_SetParseEnd(hParser, Config_End);
+    // Push a read from the base proplist.
+    PushArrayString(g_hIncludePropLists, PROPCONFIG_BASE);
 
-    new line, col;
-    new String:error[128];
-    new SMCError:result = SMC_ParseFile(hParser, g_sConfigPath, line, col);
-    CloseHandle(hParser);
-    
-    if (result != SMCError_Okay) {
-        SMC_GetErrorString(result, error, sizeof(error));
-        LogError("%s on line %d, col %d of %s", error, line, col, g_sConfigPath);
-        LogError("Propbonus is not running! Failed to parse %s", g_sConfigPath);
-        SetFailState("Could not parse file %s", g_sConfigPath);
-    }
-
-    new iArraySize = GetArraySize(g_hModelNames);
-    LogMessage("%d props loaded from base file.", iArraySize);
-    
-    // Load models from the map-specific configuration.
-    // TODO Add ability to drop them into one file?
-    new String:sConfigPath[PLATFORM_MAX_PATH];
-    
+    // Push a read from the map-specific proplist.
     new String:mapName[64];
     GetCurrentMap(mapName, sizeof(mapName));
+    PushArrayString(g_hIncludePropLists, mapName);
+    
+    // Run through all prop lists, importing new ones.
+    // Recheck GetArraySize as other files may have been imported.
+    new iCurrentPropCount = 0;
+    for (new i = 0; i < GetArraySize(g_hIncludePropLists); i++) {
+        new String:propList[PLATFORM_MAX_PATH];
+        GetArrayString(g_hIncludePropLists, i, propList, sizeof(propList));
+        
+        ReadPropConfigurationFile(propList);
+        
+        new iUpdatedPropCount = GetArraySize(g_hModelNames);
+        LogMessage("%d props added from %s.", iUpdatedPropCount - iCurrentPropCount, propList);
+        iCurrentPropCount = iUpdatedPropCount;
+    }
+    
+    ClearArray(g_hIncludePropLists);
+}
 
+ReadPropConfigurationFile(String:fileName[]) {
+    new String:sConfigPath[PLATFORM_MAX_PATH];
     new String:mapFilePath[128];
-    Format(mapFilePath, sizeof(mapFilePath), "data/propbonusround_models/%s.txt", mapName);
+    Format(mapFilePath, sizeof(mapFilePath), "data/propbonusround/%s.txt", fileName);
     BuildPath(Path_SM, sConfigPath, sizeof(sConfigPath), mapFilePath);
+
+    if (!FileExists(sConfigPath) && strcmp(fileName, PROPCONFIG_BASE) == 0) {
+        // Config file does not exist. Re-create the file before precache.
+        LogMessage("Models file not found at %s. Auto-creating file...", mapFilePath);
+        
+        new String:sConfigDir[PLATFORM_MAX_PATH];
+        BuildPath(Path_SM, sConfigDir, sizeof(sConfigDir), "data/propbonusround/");
+        if (!DirExists(sConfigDir)) {
+            CreateDirectory(sConfigDir, 511);
+        }
+        
+        SetupDefaultProplistFile(sConfigPath);
+        
+        if (!FileExists(sConfigPath)) {
+            // Second fail-safe check. Somehow, the file did not get created, so it is disable time.
+            SetFailState("Models file (%s) still not found.", mapFilePath);
+        }
+    }
     
     if (FileExists(sConfigPath)) {
-        new Handle:hMapParser = SMC_CreateParser();
-        SMC_SetReaders(hMapParser, Config_NewSection, Config_KeyValue, Config_EndSection);
-        SMC_SetParseEnd(hMapParser, Config_End);
+        new Handle:hParser = SMC_CreateParser();
+        new line, col;
+        new String:error[128];
 
-        new SMCError:mapResult = SMC_ParseFile(hMapParser, sConfigPath, line, col);
-        CloseHandle(hMapParser);
+        SMC_SetReaders(hParser, Config_NewSection, Config_KeyValue, Config_EndSection);
+        SMC_SetParseEnd(hParser, Config_End);
+
+        new SMCError:mapResult = SMC_ParseFile(hParser, sConfigPath, line, col);
+        CloseHandle(hParser);
         
         if (mapResult != SMCError_Okay) {
             SMC_GetErrorString(mapResult, error, sizeof(error));
             LogError("%s on line %d, col %d of %s", error, line, col, sConfigPath);
-            LogError("Failed to parse map-specific proplist %s.", sConfigPath);
+            LogError("Failed to parse proplist %s.", sConfigPath);
+            
+            if (strcmp(fileName, PROPCONFIG_BASE) == 0) {
+                SetFailState("Could not parse file %s", sConfigPath);
+            }
         }
     } else {
-        LogMessage("Could not find map-specific proplist %s.", sConfigPath);
+        LogMessage("Could not find proplist %s.", sConfigPath);
     }
-
-    new iMapArraySize = GetArraySize(g_hModelNames);
-    LogMessage("%d props loaded from map-specific list for %s.", iMapArraySize - iArraySize, mapName);
 }
 
 public SMCResult:Config_NewSection(Handle:parser, const String:section[], bool:quotes) {
@@ -678,8 +696,22 @@ public SMCResult:Config_NewSection(Handle:parser, const String:section[], bool:q
 }
 
 public SMCResult:Config_KeyValue(Handle:parser, const String:key[], const String:value[], bool:key_quotes, bool:value_quotes) {
-    PushArrayString(g_hModelNames, key);
-    PushArrayString(g_hModelPaths, value);
+    // If the key is an #include, add to the list.
+    if (strcmp(key, INCLUDE_PROPLIST_KEY) == 0) {
+        // Split the value by using spaces.
+        new String:sImportLists[16][PLATFORM_MAX_PATH];
+        ExplodeString(value, " ", sImportLists, sizeof(sImportLists), sizeof(sImportLists[]));
+        
+        for (new i = 0; i < sizeof(sImportLists); i++) {
+            // Prevent duplicates to prevent repeat loads and infinite loops.
+            if (strlen(sImportLists[i]) != 0 && FindStringInArray(g_hIncludePropLists, sImportLists[i]) == -1) {
+                PushArrayString(g_hIncludePropLists, sImportLists[i]);
+            }
+        }
+    } else {
+        PushArrayString(g_hModelNames, key);
+        PushArrayString(g_hModelPaths, value);
+    }
     return SMCParse_Continue;
 }
 
@@ -763,7 +795,7 @@ public MenuHandler_Players(Handle:menu, MenuAction:action, param1, param2) {
     }
 }
 
-SetupDefaultProplistFile() {
+SetupDefaultProplistFile(String:sConfigPath[]) {
     new Handle:hKVBuildProplist = CreateKeyValues("propbonusround");
 
     KvJumpToKey(hKVBuildProplist, "proplist", true);
@@ -800,7 +832,7 @@ SetupDefaultProplistFile() {
     KvSetString(hKVBuildProplist, "Terminal Chair", "models/props_spytech/terminal_chair.mdl");
 
     KvRewind(hKVBuildProplist);			
-    KeyValuesToFile(hKVBuildProplist, g_sConfigPath);
+    KeyValuesToFile(hKVBuildProplist, sConfigPath);
     
     //Phew...glad thats over with.
     CloseHandle(hKVBuildProplist);
