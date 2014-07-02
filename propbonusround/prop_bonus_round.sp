@@ -17,10 +17,12 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION "1.3.3"
+#define PLUGIN_VERSION "1.4.0"
 
 #define INVIS					{255,255,255,0}
 #define NORMAL					{255,255,255,255}
+
+#define DEFAULT_PROP_SPEED      0
 
 new Handle:hAdminMenu = INVALID_HANDLE;
 new Handle:Cvar_AdminFlag = INVALID_HANDLE;
@@ -34,6 +36,8 @@ new Handle:Cvar_Respawnplayer = INVALID_HANDLE;
 new Handle:g_hModelNames = INVALID_HANDLE;
 new Handle:g_hModelPaths = INVALID_HANDLE;
 
+new Handle:Cvar_PropSpeed = INVALID_HANDLE;
+
 new g_adminonlyCvar;
 new g_thirdpersonCvar;
 new g_hitremovePropCvar;
@@ -41,6 +45,8 @@ new g_announcementCvar;
 new g_respawnplayerCvar;
 new g_iArraySize;
 new g_winnerTeam;
+
+new g_iPropSpeed;
 
 new bool:g_InThirdperson[MAXPLAYERS+1] = { false, ... };
 new bool:g_bIsPropLocked[MAXPLAYERS+1] = { false, ... };
@@ -78,7 +84,10 @@ public OnPluginStart() {
     Cvar_HitRemoveProp = CreateConVar("sm_propbonus_removeproponhit", "0", "Remove player prop once they take damage?(1/0 = yes/no)");
     Cvar_Respawnplayer = CreateConVar("sm_propbonus_respawndead", "0", "Respawn dead players at start of bonusround?(1/0 = yes/no)");
     Cvar_ThirdTriggers = CreateConVar("sm_propbonus_triggers", "tp,third", "SM command triggers for thirdperson - Separated by commas. Each will have the !third, /third, sm_third associated with it.");
-
+    
+    Cvar_PropSpeed = CreateConVar("sm_propbonus_forcespeed", "0", "Force all props to a specific speed, in an integer representing HU/s.  Setting this to 0 allows props to move at default speed.");
+    HookConVarChange(Cvar_PropSpeed, Cvars_Changed);
+    
     RegAdminCmd("sm_prop", Command_Propplayer, ADMFLAG_BAN, "sm_prop <#userid|name>");
 
     HookEvent("teamplay_round_start", Hook_RoundStart, EventHookMode_Post);
@@ -308,6 +317,11 @@ CreatePropPlayer(client) {
     // Kill wearables so Unusual effects do not show.
     // No worries, they'll be remade on spawn.
     RemoveWearables(client);
+    
+    // Force prop speed.
+    if (g_iPropSpeed != DEFAULT_PROP_SPEED) {
+        SetEntPropFloat(client, Prop_Send, "m_flMaxspeed", float(g_iPropSpeed));
+    }
 
     //Print Model name info to client
     PrintCenterText(client, "You are a %s!", sName);
@@ -332,6 +346,9 @@ UnpropPlayer(client, bool:respawn = false) {
     
     // Clear prop flag.
     g_bIsProp[client] = false;
+    
+    // Reset speed to default.
+    TF2_StunPlayer(client, 0.0, 0.0, TF_STUNFLAG_SLOWDOWN);
     
     // If respawn is set, return their weapons.
     if (respawn) {
@@ -380,7 +397,7 @@ public Action:Command_Thirdperson(client, args) {
         // Toggle thirdperson mode on props.
         SetThirdPerson(client, !g_InThirdperson[client]);
     } else {
-        ReplyToCommand(client, "[SM] You must be a PROP to use thirdperson.");
+        ReplyToCommand(client, "[SM] You must be a prop to use thirdperson.");
     }
     
     return Plugin_Handled;
@@ -432,12 +449,17 @@ SetPropLockState(client, bool:bPropLocked) {
     SetVariantInt(bPropLocked ? 0 : 1);
     AcceptEntityInput(client, "SetCustomModelRotates");
     
-    // Almost disable all movement if proplock is enabled.
+    // Disable all movement if proplock is enabled.
     if (bPropLocked) {
         SetEntPropFloat(client, Prop_Send, "m_flMaxspeed", 1.0);
     } else {
-        // Stunning the player resets their speed to default.
-        TF2_StunPlayer(client, 0.0, 0.0, TF_STUNFLAG_SLOWDOWN);
+        // Override speed again if needed.
+        if (g_iPropSpeed != DEFAULT_PROP_SPEED) {
+            SetEntPropFloat(client, Prop_Send, "m_flMaxspeed", float(g_iPropSpeed));
+        } else {
+            // Stunning the player resets their speed to default.
+            TF2_StunPlayer(client, 0.0, 0.0, TF_STUNFLAG_SLOWDOWN);
+        }
     }
     
     // Show hint text if toggling state in case.
@@ -840,5 +862,7 @@ public Cvars_Changed(Handle:convar, const String:oldValue[], const String:newVal
         g_announcementCvar = StringToInt(newValue);
     } else if(convar == Cvar_Respawnplayer) {
         g_respawnplayerCvar = StringToInt(newValue);
+    } else if(convar == Cvar_PropSpeed) {
+        g_iPropSpeed = StringToInt(newValue);
     }
 }
