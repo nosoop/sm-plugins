@@ -1,14 +1,15 @@
-/*
-* Prop Bonus Round (TF2) 
-* Author(s): retsam, cleaned up by nosoop
-* File: prop_bonus_round.sp
-* Description: Turns the losing team into random props during bonus round!
-*
-* Credits to: strontiumdog for the idea based off his DODS version.
-* Credits to: Antithasys for SMC Parser/SM auto-cmds code and much help!
-* 
-* 1.0.0 - Forked from https://forums.alliedmods.net/showthread.php?p=1096024
-*/
+/**
+ * Prop Bonus Round (TF2) 
+ * Author(s): retsam, cleaned up by nosoop
+ * File: prop_bonus_round.sp
+ * Description: Turns the losing team into random props during bonus round!
+ *
+ * Credits to: strontiumdog for the idea based off his DODS version.
+ * Credits to: Antithasys for SMC Parser/SM auto-cmds code and much help!
+ * 
+ * 1.0.0 - Forked from https://forums.alliedmods.net/showthread.php?p=1096024
+ * See the commits to https://github.com/nosoop/sm-plugins for updated notes.
+ */
 
 #pragma semicolon 1
 
@@ -17,7 +18,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION "1.4.1"
+#define PLUGIN_VERSION "1.5.0"
 
 #define INVIS					{255,255,255,0}
 #define NORMAL					{255,255,255,255}
@@ -52,7 +53,6 @@ new bool:g_InThirdperson[MAXPLAYERS+1] = { false, ... };
 new bool:g_bIsPropLocked[MAXPLAYERS+1] = { false, ... };
 new bool:g_bRecentlySetPropLock[MAXPLAYERS+1] = { false, ... };
 new bool:g_bIsProp[MAXPLAYERS+1] = { false, ... };
-new g_iPlayerModelIndex[MAXPLAYERS+1] = { -1, ... };
 
 new bool:bIsPlayerAdmin[MAXPLAYERS + 1] = { false, ... };
 new bool:g_bIsEnabled = true;
@@ -123,7 +123,7 @@ public OnPluginStart() {
     HookEvent("player_death", Hook_Playerdeath, EventHookMode_Post);
     HookEvent("player_hurt", Hook_PlayerHurt, EventHookMode_Post);
 
-    // Attach player prop option on menu.
+    // Attach player prop option to menu.
     new Handle:topmenu;
     if (LibraryExists("adminmenu") && ((topmenu = GetAdminTopMenu()) != INVALID_HANDLE)) {
         OnAdminMenuReady(topmenu);
@@ -142,7 +142,6 @@ public OnClientPostAdminCheck(client) {
 
     g_InThirdperson[client] = false;
     g_bIsProp[client] = false;
-    g_iPlayerModelIndex[client] = -1;
 }
 
 public OnConfigsExecuted() {
@@ -161,7 +160,6 @@ public OnConfigsExecuted() {
 // Client disconnect - unset client prop settings.
 public OnClientDisconnect(client) {
     g_InThirdperson[client] = false;
-    g_iPlayerModelIndex[client] = -1;
     g_bIsProp[client] = false;
     g_bIsPropLocked[client] = false;
 }
@@ -315,14 +313,15 @@ public Action:Timer_EquipProps(Handle:timer) {
             PropPlayer(x);
         }
     }
+    return Plugin_Handled;
 }
 
-// Turns a client into a prop.
+// Turns a client into a prop.  Return value is the index value of the prop selected.
 PropPlayer(client) {
-    g_iPlayerModelIndex[client] = GetRandomInt(0, g_iArraySize);
+    new iModelIndex = GetRandomInt(0, g_iArraySize);
     new String:sPath[PLATFORM_MAX_PATH], String:sName[128];
-    GetArrayString(g_hModelNames, g_iPlayerModelIndex[client], sName, sizeof(sName));
-    GetArrayString(g_hModelPaths, g_iPlayerModelIndex[client], sPath, sizeof(sPath));
+    GetArrayString(g_hModelNames, iModelIndex, sName, sizeof(sName));
+    GetArrayString(g_hModelPaths, iModelIndex, sPath, sizeof(sPath));
     
     g_bIsProp[client] = true;
     Colorize(client, INVIS);
@@ -357,6 +356,8 @@ PropPlayer(client) {
     } else {
         PrintToChat(client,"\x01You are disguised as a \x04%s\x01 Go hide!", sName);
     }
+    
+    return iModelIndex;
 }
 
 // Turns a client into a not-prop.
@@ -672,13 +673,7 @@ public OnAdminMenuReady(Handle:topmenu) {
     new TopMenuObject:player_commands = FindTopMenuCategory(hAdminMenu, ADMINMENU_PLAYERCOMMANDS);
 
     if (player_commands != INVALID_TOPMENUOBJECT) {
-        AddToTopMenu(hAdminMenu,
-        "sm_propplayer",
-        TopMenuObject_Item,
-        AdminMenu_Propplayer, 
-        player_commands,
-        "sm_propplayer",
-        ADMFLAG_ROOT);
+        AddToTopMenu(hAdminMenu, "sm_propplayer", TopMenuObject_Item, AdminMenu_Propplayer, player_commands, "sm_propplayer", ADMFLAG_ROOT);
     }
 }
 
@@ -788,7 +783,6 @@ RemovePropModel(client) {
         AcceptEntityInput(client, "SetCustomModel");
         
         g_bIsProp[client] = false;
-        g_iPlayerModelIndex[client] = -1;
     }
 }
 
@@ -869,10 +863,7 @@ public Cvars_Changed(Handle:convar, const String:oldValue[], const String:newVal
             for(new x = 1; x <= MaxClients; x++) {
                 if(IsClientInGame(x) && IsPlayerAlive(x)) {
                     if(g_bIsProp[x]) {
-                        RemovePropModel(x);
-                    }
-                    if(g_InThirdperson[x]) {
-                        SetThirdPerson(x, false);
+                        UnpropPlayer(x);
                     }
                 }
             }
