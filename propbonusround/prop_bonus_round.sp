@@ -17,7 +17,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION "1.3.0"
+#define PLUGIN_VERSION "1.3.1"
 
 #define INVIS					{255,255,255,0}
 #define NORMAL					{255,255,255,255}
@@ -186,12 +186,7 @@ public Hook_PlayerHurt(Handle:event, const String:name[], bool:dontBroadcast) {
         return;
 
     if(g_IsPropModel[client] == 1) {
-        Colorize(client, NORMAL);
-        RemovePropModel(client);
-
-        if(g_InThirdperson[client]) {
-            SetThirdPerson(client, false);
-        }
+        UnpropPlayer(client);
     }
 }
 
@@ -210,25 +205,16 @@ public Hook_Playerdeath(Handle:event, const String:name[], bool:dontBroadcast) {
         return;
 
     if(g_IsPropModel[client] == 1) {
-        Colorize(client, NORMAL);
-        
-        SetVariantString("");
-        AcceptEntityInput(client, "SetCustomModel");
-        g_iPlayerModelIndex[client] = -1;
-        
-        if(g_InThirdperson[client]) {
-            SetThirdPerson(client, false);
-            
-            g_IsPropModel[client] = 0;
-        }
+        UnpropPlayer(client);
     }
 }
 
 // Event hook for round start.
 public Hook_RoundStart(Handle:event, const String:name[], bool:dontBroadcast) {
     if(!g_bIsEnabled)
-    return;
+        return;
 
+    // Unprop all propped players.
     for(new x = 1; x <= MaxClients; x++) {
         if(!IsClientInGame(x)) {
             continue;
@@ -238,13 +224,6 @@ public Hook_RoundStart(Handle:event, const String:name[], bool:dontBroadcast) {
         if(g_IsPropModel[x] == 0) {
             continue;
         }
-
-        //Colorize(x, NORMAL);
-        //RemovePropModel(x);
-        
-        //if(g_InThirdperson[x]) {
-        //    SetThirdPerson(x, false);
-        //}
         
         UnpropPlayer(x);
     }
@@ -345,29 +324,31 @@ CreatePropPlayer(client) {
 
 // Turns a client into a not-prop.
 UnpropPlayer(client, bool:respawn = false) {
-    Colorize(target, NORMAL);
-    RemovePropModel(target);
+    Colorize(client, NORMAL);
+    RemovePropModel(client);
     
-    if(g_InThirdperson[target])	{
-        SetThirdPerson(target, false);
+    if(g_InThirdperson[client])	{
+        SetThirdPerson(client, false);
     }
     
     // Clear proplock flag.
     g_bIsPropLocked[client] = false;
     g_IsPropModel[client] = 0;
     
+    // If respawn is set, return their weapons.
     if (respawn) {
-        // Return the items to the player by respawning them and teleporting them back into position.
+        // Store position, angle, and velocity before respawning.
         decl Float:origin[3], Float:angle[3], Float:velocity[3];
         GetClientAbsOrigin(client, origin);
         GetClientEyeAngles(client, angle);
         GetEntPropVector(client, Prop_Data, "m_vecAbsVelocity", velocity);
         
         // Also force them back to their current class.
+        // Can't do anything if they switch loadouts on the class while being a prop, but eh.
         decl TFClassType:class;
-        class = TF2_GetPlayerClass(target);
-        TF2_SetPlayerClass(target, class);
-        TF2_RespawnPlayer(target);
+        class = TF2_GetPlayerClass(client);
+        TF2_SetPlayerClass(client, class);
+        TF2_RespawnPlayer(client);
         
         TeleportEntity(client, origin, angle, velocity);
     }
