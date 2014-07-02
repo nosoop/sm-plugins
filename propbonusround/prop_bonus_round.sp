@@ -17,7 +17,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION "1.3.1"
+#define PLUGIN_VERSION "1.3.2"
 
 #define INVIS					{255,255,255,0}
 #define NORMAL					{255,255,255,255}
@@ -46,7 +46,7 @@ new bool:g_InThirdperson[MAXPLAYERS+1] = { false, ... };
 new bool:g_bIsPropLocked[MAXPLAYERS+1] = { false, ... };
 new bool:g_bRecentlySetPropLock[MAXPLAYERS+1] = { false, ... };
 
-new g_IsPropModel[MAXPLAYERS+1] = { 0, ... };
+new bool:g_bIsProp[MAXPLAYERS+1] = { false, ... };
 new g_iPlayerModelIndex[MAXPLAYERS+1] = { -1, ... };
 
 new bool:bIsPlayerAdmin[MAXPLAYERS + 1] = { false, ... };
@@ -112,7 +112,7 @@ public OnClientPostAdminCheck(client) {
     }
 
     g_InThirdperson[client] = false;
-    g_IsPropModel[client] = 0;
+    g_bIsProp[client] = false;
     g_iPlayerModelIndex[client] = -1;
 }
 
@@ -132,7 +132,7 @@ public OnConfigsExecuted() {
 public OnClientDisconnect(client) {
     g_InThirdperson[client] = false;
     g_iPlayerModelIndex[client] = -1;
-    g_IsPropModel[client] = 0;
+    g_bIsProp[client] = false;
 }
 
 public OnMapStart() {
@@ -185,7 +185,7 @@ public Hook_PlayerHurt(Handle:event, const String:name[], bool:dontBroadcast) {
     if(client < 1 || attacker < 1 || client == attacker)
         return;
 
-    if(g_IsPropModel[client] == 1) {
+    if(g_bIsProp[client]) {
         UnpropPlayer(client);
     }
 }
@@ -204,7 +204,7 @@ public Hook_Playerdeath(Handle:event, const String:name[], bool:dontBroadcast) {
     if(client < 1 || !IsClientInGame(client))
         return;
 
-    if(g_IsPropModel[client] == 1) {
+    if(g_bIsProp[client]) {
         UnpropPlayer(client);
     }
 }
@@ -220,12 +220,9 @@ public Hook_RoundStart(Handle:event, const String:name[], bool:dontBroadcast) {
             continue;
         }
         
-        //If player is not a prop, skip.
-        if(g_IsPropModel[x] == 0) {
-            continue;
+        if(g_bIsProp[x]) {
+            UnpropPlayer(x);
         }
-        
-        UnpropPlayer(x);
     }
     
     g_bBonusRound = false;
@@ -270,7 +267,7 @@ public Action:Timer_EquipProps(Handle:timer) {
         }
         
         //If player is already a prop, skip id.
-        if(g_IsPropModel[x] != 0) {
+        if(g_bIsProp[x]) {
             continue;
         }
         
@@ -292,7 +289,7 @@ CreatePropPlayer(client) {
     GetArrayString(g_hModelNames, g_iPlayerModelIndex[client], sName, sizeof(sName));
     GetArrayString(g_hModelPaths, g_iPlayerModelIndex[client], sPath, sizeof(sPath));
     
-    g_IsPropModel[client] = 1;
+    g_bIsProp[client] = true;
     Colorize(client, INVIS);
 
     // Set to prop model.
@@ -333,7 +330,9 @@ UnpropPlayer(client, bool:respawn = false) {
     
     // Clear proplock flag.
     g_bIsPropLocked[client] = false;
-    g_IsPropModel[client] = 0;
+    
+    // Clear prop flag.
+    g_bIsProp[client] = false;
     
     // If respawn is set, return their weapons.
     if (respawn) {
@@ -358,7 +357,7 @@ PerformPropPlayer(client, target) {
     if(!IsClientInGame(target) || !IsPlayerAlive(target))
         return;
     
-    if(g_IsPropModel[target] == 0) {
+    if(!g_bIsProp[target]) {
         CreatePropPlayer(target);
         LogAction(client, target, "\"%L\" set prop on \"%L\"", client, target);
         ShowActivity(client, " Set prop on %N", target);
@@ -378,7 +377,8 @@ public Action:Command_Thirdperson(client, args) {
         return Plugin_Handled;
     }
 
-    if(g_IsPropModel[client] != 0) {
+    if(g_bIsProp[client]) {
+        // Toggle thirdperson mode on props.
         if(!g_InThirdperson[client]) {
             SetThirdPerson(client, true);
         } else {
@@ -403,7 +403,7 @@ SetThirdPerson(target, bool:bEnabled) {
 // Global forward to test if a client wants to enable proplock.
 public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:angles[3], &weapon) {
     // Only run the checks when the client is a prop.
-    if (g_IsPropModel[client] == 1) {
+    if (g_bIsProp[client]) {
         // +attack toggles prop locking.
         if ((buttons & IN_ATTACK) == IN_ATTACK) {
             if (!g_bRecentlySetPropLock[client]) {
@@ -726,7 +726,7 @@ stock RemovePropModel(client) {
         SetVariantString("");
         AcceptEntityInput(client, "SetCustomModel");
         
-        g_IsPropModel[client] = 0;
+        g_bIsProp[client] = false;
         g_iPlayerModelIndex[client] = -1;
     }
 }
@@ -809,7 +809,7 @@ public Cvars_Changed(Handle:convar, const String:oldValue[], const String:newVal
             UnhookEvent("player_hurt", Hook_PlayerHurt, EventHookMode_Post);
             for(new x = 1; x <= MaxClients; x++) {
                 if(IsClientInGame(x) && IsPlayerAlive(x)) {
-                    if(g_IsPropModel[x] != 0) {
+                    if(g_bIsProp[x]) {
                         RemovePropModel(x);
                     }
                     if(g_InThirdperson[x]) {
