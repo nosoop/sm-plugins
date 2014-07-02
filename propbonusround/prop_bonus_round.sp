@@ -17,7 +17,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION "1.4.0"
+#define PLUGIN_VERSION "1.4.1"
 
 #define INVIS					{255,255,255,0}
 #define NORMAL					{255,255,255,255}
@@ -64,10 +64,10 @@ new String:g_sCharAdminFlag[32];
 public Plugin:myinfo = 
 {
     name = "Prop Bonus Round",
-    author = "retsam, nosoop",
+    author = "retsam (www.multiclangaming.net), nosoop",
     description = "Turns the losing team into random props during bonus round!",
     version = PLUGIN_VERSION,
-    url = "www.multiclangaming.net"
+    url = "https://github.com/nosoop/sm-plugins"
 }
 
 public OnPluginStart() {
@@ -75,41 +75,62 @@ public OnPluginStart() {
 
     CreateConVar("sm_propbonus_version", PLUGIN_VERSION, "Version of Prop Bonus Round", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_DONTRECORD);
     
-    // Create cvar hooks
+    /**
+     * Create and hook cvars.
+     */
+    // sm_propbonus_enabled
     Cvar_Enabled = CreateConVar("sm_propbonus_enabled", "1", "Enable/Disable prop bonus round plugin.");
-    Cvar_AdminOnly = CreateConVar("sm_propbonus_adminonly", "0", "Enable plugin for admins only? (1/0 = yes/no)");
-    Cvar_AdminFlag = CreateConVar("sm_propbonus_flag", "b", "Admin flag to use if adminonly is enabled (only one).  Must be a in char format.");
-    Cvar_ThirdPerson = CreateConVar("sm_propbonus_allowtriggers", "0", "Allow prop players thirdperson triggers?(1/0 = yes/no)");
-    Cvar_Announcement = CreateConVar("sm_propbonus_announcement", "1", "Public announcement msg at start of bonus round?(1/0 = yes/no)");
-    Cvar_HitRemoveProp = CreateConVar("sm_propbonus_removeproponhit", "0", "Remove player prop once they take damage?(1/0 = yes/no)");
-    Cvar_Respawnplayer = CreateConVar("sm_propbonus_respawndead", "0", "Respawn dead players at start of bonusround?(1/0 = yes/no)");
-    Cvar_ThirdTriggers = CreateConVar("sm_propbonus_triggers", "tp,third", "SM command triggers for thirdperson - Separated by commas. Each will have the !third, /third, sm_third associated with it.");
+    HookConVarChange(Cvar_Enabled, Cvars_Changed);
     
+    // sm_propbonus_adminonly
+    Cvar_AdminOnly = CreateConVar("sm_propbonus_adminonly", "0", "Enable plugin for admins only? (1/0 = yes/no)");
+    HookConVarChange(Cvar_AdminOnly, Cvars_Changed);
+    
+    // sm_propbonus_flag
+    Cvar_AdminFlag = CreateConVar("sm_propbonus_flag", "b", "Admin flag to use if adminonly is enabled (only one).  Must be a in char format.");
+    
+    // sm_propbonus_allowtriggers
+    Cvar_ThirdPerson = CreateConVar("sm_propbonus_allowtriggers", "0", "Allow prop players thirdperson triggers?(1/0 = yes/no)");
+    HookConVarChange(Cvar_ThirdPerson, Cvars_Changed);
+
+    // sm_propbonus_announcement
+    Cvar_Announcement = CreateConVar("sm_propbonus_announcement", "1", "Public announcement msg at start of bonus round?(1/0 = yes/no)");
+    HookConVarChange(Cvar_Announcement, Cvars_Changed);
+
+    // sm_propbonus_removeproponhit
+    Cvar_HitRemoveProp = CreateConVar("sm_propbonus_removeproponhit", "0", "Remove player prop once they take damage?(1/0 = yes/no)");
+    HookConVarChange(Cvar_HitRemoveProp, Cvars_Changed);
+
+    // sm_propbonus_respawndead
+    Cvar_Respawnplayer = CreateConVar("sm_propbonus_respawndead", "0", "Respawn dead players at start of bonusround?(1/0 = yes/no)");
+    HookConVarChange(Cvar_Respawnplayer, Cvars_Changed);
+
+    // Prop speed.
     Cvar_PropSpeed = CreateConVar("sm_propbonus_forcespeed", "0", "Force all props to a specific speed, in an integer representing HU/s.  Setting this to 0 allows props to move at default speed.");
     HookConVarChange(Cvar_PropSpeed, Cvars_Changed);
-    
-    RegAdminCmd("sm_prop", Command_Propplayer, ADMFLAG_BAN, "sm_prop <#userid|name>");
 
+    // Third-person toggle commands.
+    Cvar_ThirdTriggers = CreateConVar("sm_propbonus_triggers", "tp,third", "SM command triggers for thirdperson - Separated by commas. Each will have the !third, /third, sm_third associated with it.");
+    
+    // Command to prop a player.
+    RegAdminCmd("sm_prop", Command_Propplayer, ADMFLAG_BAN, "sm_prop <#userid|name> - toggles prop on a player");
+
+    // Hook round events to set and unset props.
     HookEvent("teamplay_round_start", Hook_RoundStart, EventHookMode_Post);
     HookEvent("teamplay_round_win", Hook_RoundWin, EventHookMode_Post);
+    
+    // Hook player events to unset prop on death and remove prop on player when hit if desired.
     HookEvent("player_death", Hook_Playerdeath, EventHookMode_Post);
     HookEvent("player_hurt", Hook_PlayerHurt, EventHookMode_Post);
-    
-    HookConVarChange(Cvar_Enabled, Cvars_Changed);
-    HookConVarChange(Cvar_ThirdPerson, Cvars_Changed);
-    HookConVarChange(Cvar_HitRemoveProp, Cvars_Changed);
-    HookConVarChange(Cvar_AdminOnly, Cvars_Changed);
-    HookConVarChange(Cvar_Announcement, Cvars_Changed);
-    HookConVarChange(Cvar_Respawnplayer, Cvars_Changed);
-    
-    CreateThirdpersonCommands();
-    
+
+    // Attach player prop option on menu.
     new Handle:topmenu;
     if (LibraryExists("adminmenu") && ((topmenu = GetAdminTopMenu()) != INVALID_HANDLE)) {
         OnAdminMenuReady(topmenu);
     }
     
     AutoExecConfig(true, "plugin.propbonusround");
+    CreateThirdpersonCommands();
 }
 
 public OnClientPostAdminCheck(client) {
@@ -137,10 +158,12 @@ public OnConfigsExecuted() {
     g_respawnplayerCvar = GetConVarInt(Cvar_Respawnplayer);
 }
 
+// Client disconnect - unset client prop settings.
 public OnClientDisconnect(client) {
     g_InThirdperson[client] = false;
     g_iPlayerModelIndex[client] = -1;
     g_bIsProp[client] = false;
+    g_bIsPropLocked[client] = false;
 }
 
 public OnMapStart() {
@@ -177,8 +200,11 @@ public Action:Command_Propplayer(client, args) {
     
     for(new i = 0; i < target_count; i++) {
         if(IsClientInGame(target_list[i]) && IsPlayerAlive(target_list[i])) {
-            PerformPropPlayer(client, target_list[i]);
+            PerformPropPlayer(client, target_list[i], target_count == 1);
         }
+    }
+    if (target_count > 1) {
+        ShowActivity(client, " Toggled prop on %N", target_name);
     }
     return Plugin_Handled;
 }
@@ -193,6 +219,7 @@ public Hook_PlayerHurt(Handle:event, const String:name[], bool:dontBroadcast) {
     if(client < 1 || attacker < 1 || client == attacker)
         return;
 
+    // Unprop player if attacked by another player.
     if(g_bIsProp[client]) {
         UnpropPlayer(client);
     }
@@ -285,13 +312,13 @@ public Action:Timer_EquipProps(Handle:timer) {
         }
         
         if(IsPlayerAlive(x)) {
-            CreatePropPlayer(x);
+            PropPlayer(x);
         }
     }
 }
 
 // Turns a client into a prop.
-CreatePropPlayer(client) {
+PropPlayer(client) {
     g_iPlayerModelIndex[client] = GetRandomInt(0, g_iArraySize);
     new String:sPath[PLATFORM_MAX_PATH], String:sName[128];
     GetArrayString(g_hModelNames, g_iPlayerModelIndex[client], sName, sizeof(sName));
@@ -369,18 +396,24 @@ UnpropPlayer(client, bool:respawn = false) {
     }
 }
 
-PerformPropPlayer(client, target) {
+// Action to prop a player.
+// Do not show activity here if targetting multiple players.
+PerformPropPlayer(client, target, bool:bShowActivity = true) {
     if(!IsClientInGame(target) || !IsPlayerAlive(target))
         return;
     
     if(!g_bIsProp[target]) {
-        CreatePropPlayer(target);
+        PropPlayer(target);
         LogAction(client, target, "\"%L\" set prop on \"%L\"", client, target);
-        ShowActivity(client, " Set prop on %N", target);
+        if (bShowActivity) {
+            ShowActivity(client, " Set prop on %N", target);
+        }
     } else {
         UnpropPlayer(target, true);
         LogAction(client, target, "\"%L\" removed prop on \"%L\"", client, target);
-        ShowActivity(client, " Removed prop on %N", target);
+        if (bShowActivity) {
+            ShowActivity(client, " Removed prop on %N", target);
+        }
     }
 }
 
@@ -567,12 +600,12 @@ stock ProcessConfigFile() {
     // Model file checks. Auto-create or disable if necessary.
     if (!FileExists(g_sConfigPath)) {
         // Config file does not exist. Re-create the file before precache.
-        LogMessage("Models file not found at %s. Auto-Creating file...", g_sConfigPath);
+        LogMessage("Models file not found at %s. Auto-creating file...", g_sConfigPath);
         SetupDefaultProplistFile();
         
         if (!FileExists(g_sConfigPath)) {
             // Second fail-safe check. Somehow, the file did not get created, so it is disable time.
-            SetFailState("Models file (propbonusround_models.txt) still not found. You Suck.");
+            SetFailState("Models file (propbonusround_models.txt) still not found.");
         }
     }
     
@@ -749,7 +782,7 @@ StripWeapons(client) {
     }
 }
 
-stock RemovePropModel(client) {
+RemovePropModel(client) {
     if(IsValidEntity(client)) {
         SetVariantString("");
         AcceptEntityInput(client, "SetCustomModel");
@@ -773,10 +806,8 @@ stock CreateThirdpersonCommands() {
     new String:sBuffer[128], String:sTriggerCommands[18][128];
     GetConVarString(Cvar_ThirdTriggers, sBuffer, sizeof(sBuffer));
     ExplodeString(sBuffer, ",", sTriggerCommands, sizeof(sTriggerCommands), sizeof(sTriggerCommands[]));
-    for (new x = 0; x < sizeof(sTriggerCommands); x++)
-    {
-        if(IsStringBlank(sTriggerCommands[x]))
-        {
+    for (new x = 0; x < sizeof(sTriggerCommands); x++) {
+        if(IsStringBlank(sTriggerCommands[x])) {
             continue;
         }
         new String:sCommand[128];
