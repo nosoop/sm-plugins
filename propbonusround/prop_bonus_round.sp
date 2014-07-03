@@ -19,7 +19,7 @@
 #include <adminmenu>
 
 // Plugin version.
-#define PLUGIN_VERSION "1.8.2"
+#define PLUGIN_VERSION "1.8.3"
 
 // Default prop command name.
 #define PROP_COMMAND            "sm_prop"
@@ -205,6 +205,10 @@ public OnMapStart() {
 }
 
 public Action:Command_Propplayer(client, args) {
+    if (!g_bIsEnabled) {
+        return Plugin_Handled;
+    }
+
     decl String:target[65];
     decl String:target_name[MAX_TARGET_LENGTH];
     decl target_list[MAXPLAYERS];
@@ -423,6 +427,9 @@ UnpropPlayer(client, bool:respawn = false) {
         GetClientEyeAngles(client, angle);
         GetEntPropVector(client, Prop_Data, "m_vecAbsVelocity", velocity);
         
+        // Store health to reset to on respawn.
+        new iHealth = GetEntProp(client, Prop_Data, "m_iHealth");
+        
         // Also force them back to their current class.
         // Can't do anything if they switch loadouts on the class while being a prop, but eh.
         decl TFClassType:class;
@@ -430,6 +437,8 @@ UnpropPlayer(client, bool:respawn = false) {
         TF2_SetPlayerClass(client, class);
         TF2_RespawnPlayer(client);
         
+        // Return health and position.
+        SetEntityHealth(client, iHealth);
         TeleportEntity(client, origin, angle, velocity);
     }
 }
@@ -970,12 +979,13 @@ public Cvars_Changed(Handle:convar, const String:oldValue[], const String:newVal
     if(convar == Cvar_Enabled) {
         g_bIsEnabled = StringToInt(newValue) != 0;
         HookPropBonusRoundPluginEvents(g_bIsEnabled);
-            
+        
         if (!g_bIsEnabled) {
+            // Unprop and respawn the player when the plugin is disabled dynamically.
             for (new x = 1; x <= MaxClients; x++) {
                 if(IsClientInGame(x) && IsPlayerAlive(x)) {
                     if(g_bIsProp[x]) {
-                        UnpropPlayer(x);
+                        UnpropPlayer(x, true);
                     }
                 }
             }
