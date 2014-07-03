@@ -19,7 +19,7 @@
 #include <adminmenu>
 
 // Plugin version.
-#define PLUGIN_VERSION "1.9.2"
+#define PLUGIN_VERSION "1.9.3"
 
 // Default prop command name.
 #define PROP_COMMAND            "sm_prop"
@@ -610,41 +610,13 @@ SetGlowingEyes(client, bool:enable) {
     if (decapitations >= 1) {
         if(!enable) {
             //Removes Glowing Eye
-            TF2_RemoveCond(client, 18);
+            TF2_RemoveCondition(client, TFCond_DemoBuff);
         } else {
             //Add Glowing Eye
-            TF2_AddCond(client, 18);
+            TF2_AddCondition(client, TFCond_DemoBuff, -1.0);
         }
     }
 }
-
-//This won't be required in the future as Sourcemod 1.4 already has this stuff
-stock TF2_AddCond(client, cond) {
-    new Handle:cvar = FindConVar("sv_cheats"), bool:enabled = GetConVarBool(cvar), flags = GetConVarFlags(cvar);
-    if(!enabled) {
-        SetConVarFlags(cvar, flags^FCVAR_NOTIFY^FCVAR_REPLICATED);
-        SetConVarBool(cvar, true);
-    }
-    FakeClientCommand(client, "addcond %i", cond);
-
-    if(!enabled) {
-        SetConVarBool(cvar, false);
-        SetConVarFlags(cvar, flags);
-    }
-}
-
-stock TF2_RemoveCond(client, cond) {
-    new Handle:cvar = FindConVar("sv_cheats"), bool:enabled = GetConVarBool(cvar), flags = GetConVarFlags(cvar);
-    if(!enabled) {
-        SetConVarFlags(cvar, flags^FCVAR_NOTIFY^FCVAR_REPLICATED);
-        SetConVarBool(cvar, true);
-    }
-    FakeClientCommand(client, "removecond %i", cond);
-    if(!enabled) {
-        SetConVarBool(cvar, false);
-        SetConVarFlags(cvar, flags);
-    }
-} 
 
 // Credit for SMC Parser related code goes to Antithasys!
 stock ProcessConfigFile() {
