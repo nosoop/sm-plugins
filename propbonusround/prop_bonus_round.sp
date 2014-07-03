@@ -19,7 +19,7 @@
 #include <adminmenu>
 
 // Plugin version.
-#define PLUGIN_VERSION "1.9.3"
+#define PLUGIN_VERSION "1.9.4"
 
 // Default prop command name.
 #define PROP_COMMAND            "sm_prop"
@@ -363,7 +363,22 @@ PropPlayer(client) {
     
     // Kill wearables so Unusual effects do not show.
     // No worries, they'll be remade on spawn.
-    RemoveWearables(client);
+    new ent = -1;
+    while ((ent = FindEntityByClassname(ent, "tf_wearable")) != -1) {
+        if (IsValidEntity(ent)) {		
+            if (GetEntDataEnt2(ent, FindSendPropOffs("CTFWearable", "m_hOwnerEntity")) == client) {
+                AcceptEntityInput(ent, "Kill");
+            }
+        }
+    }
+    
+    // Remove canteens, too.  (Merged from PBR v1.5, Sillium.)
+    ent = -1;
+    while((ent = FindEntityByClassname(ent, "tf_powerup_bottle")) != -1) {      
+        if (GetEntDataEnt2(ent, FindSendPropOffs("CTFPowerupBottle", "m_hOwnerEntity")) == client) {
+            AcceptEntityInput(ent, "Kill");
+        }
+    }
     
     // Force prop speed.
     if (g_iPropSpeed != PROP_NO_CUSTOM_SPEED) {
@@ -588,18 +603,6 @@ SetWearablesRGBA_Impl(client,  const String:entClass[], const String:serverClass
             if(GetEntDataEnt2(ent, FindSendPropOffs(serverClass, "m_hOwnerEntity")) == client) {
                 SetEntityRenderMode(ent, RENDER_TRANSCOLOR);
                 SetEntityRenderColor(ent, color[0], color[1], color[2], color[3]);
-            }
-        }
-    }
-}
-
-// Attempt to remove client wearables. ... this may or may not be a terrible idea.
-RemoveWearables(client) {
-    new ent = -1;
-    while ((ent = FindEntityByClassname(ent, "tf_wearable")) != -1) {
-        if (IsValidEntity(ent)) {		
-            if(GetEntDataEnt2(ent, FindSendPropOffs("CTFWearable", "m_hOwnerEntity")) == client) {
-                AcceptEntityInput(ent, "Kill");
             }
         }
     }
