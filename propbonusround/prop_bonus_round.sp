@@ -19,7 +19,7 @@
 #include <adminmenu>
 
 // Plugin version.
-#define PLUGIN_VERSION "1.8.0"
+#define PLUGIN_VERSION "1.8.1"
 
 // Default prop command name.
 #define PROP_COMMAND            "sm_prop"
@@ -75,6 +75,8 @@ new bool:g_bRecentlySetThirdPerson[MAXPLAYERS+1] = { false, ... };
 
 new bool:g_bIsPlayerAdmin[MAXPLAYERS + 1] = { false, ... };
 new bool:g_bIsEnabled = true;
+
+// Whether or not we are currently in humiliation mode.
 new bool:g_bBonusRound = false;
 
 new String:g_sCharAdminFlag[32];
@@ -355,6 +357,9 @@ PropPlayer(client) {
     // Strip weapons from propped player.
     StripWeapons(client);
     
+    // Hide viewmodels for cleanliness.  We don't have any weapons, so it's fine.
+    SetEntProp(client, Prop_Send, "m_bDrawViewmodel", 0);
+    
     // Kill wearables so Unusual effects do not show.
     // No worries, they'll be remade on spawn.
     RemoveWearables(client);
@@ -457,14 +462,12 @@ public Action:Command_Thirdperson(client, args) {
 }
 
 // Enables and disables third-person mode.
-// Source: https://forums.alliedmods.net/showthread.php?p=1694178?p=1694178
-// TODO Option to spoof cheats and thirdperson on a client that spawns post-round end?
+// Source (default): https://forums.alliedmods.net/showthread.php?p=1694178?p=1694178
+// Dirty hack sourced from the original plugin.
 SetThirdPerson(client, bool:bEnabled, bool:bUseDirtyHack = false) {
     if (!g_bIsProp[client]) {
         return;
     }
-    
-    SetEntProp(client, Prop_Send, "m_bDrawViewmodel", 0);
     
     if (!bUseDirtyHack) {
         // Default behavior.
@@ -472,13 +475,16 @@ SetThirdPerson(client, bool:bEnabled, bool:bUseDirtyHack = false) {
         AcceptEntityInput(client, "SetForcedTauntCam");
     } else {
         // Prepare to use dirty hack by forcing first-person mode otherwise.
-        SetVariantInt(bEnabled ? 1 : 0);
+        SetVariantInt(0);
         AcceptEntityInput(client, "SetForcedTauntCam");
         ClientCommand(client, "firstperson");
     
         /**
          * Can't force third-person mode through the taunt camera during humiliation,
-         * so we will use some entity dickery to simulate third-person mode.
+         * so we will use some entity dickery to create third-person mode.
+         *
+         * This third-person mode is a bit laggy when acting on a player, so we only
+         * use it during the special case mentioned above.
          */
         SetEntPropEnt(client, Prop_Send, "m_hObserverTarget", bEnabled ? -1 : client);
         SetEntProp(client, Prop_Send, "m_iObserverMode", bEnabled ? 1 : 0);
@@ -498,7 +504,7 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
                 // Toggle proplock state.
                 SetPropLockState(client, !g_bIsPropLocked[client]);
                 
-                // Lock in the proplock settings, as this will be run while +attack is held.
+                // Lock in the proplock settings for one second, as this code path is run while +attack is held.
                 g_bRecentlySetPropLock[client] = true;
                 CreateTimer(1.0, UnsetPropLockToggleDelay, client);
             }
@@ -510,15 +516,16 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
                 SetThirdPerson(client, !g_bIsInThirdperson[client], g_bBonusRound);
                 PrintHintText(client, "%s third person mode.", g_bIsInThirdperson[client] ? "Enabled" : "Disabled");
                 
-                // Lock in the proplock settings, as this will be run while +attack is held.
+                // Lock in the third-person settings for a second, for the same reason as proplock.
                 g_bRecentlySetThirdPerson[client] = true;
                 CreateTimer(1.0, UnsetThirdPersonToggleDelay, client);
             }
         }
         
-        // Remove prop lock state on jump if in it.
-        // It looks better than blocking the jump and the view being weird client-side.
-        // An alternative option is to set gravity up stupidly high.
+        /**
+         * Remove proplock state on jump if we are proplocked.
+         * Looks better than blocking the jump, as client-side lag comp forces the player back down after it believes it worked.
+         */
         if ((buttons & IN_JUMP) == IN_JUMP) {
             if (g_bIsPropLocked[client]) {
                 SetPropLockState(client, false);
@@ -697,7 +704,7 @@ ReadPropConfigurationFile(String:fileName[]) {
     BuildPath(Path_SM, sConfigPath, sizeof(sConfigPath), mapFilePath);
 
     if (!FileExists(sConfigPath) && StrEqual(fileName, PROPCONFIG_BASE)) {
-        // Config file does not exist. Re-create the file before precache.
+        // Base configuration file file does not exist. Create a basic prop list file before precache.
         LogMessage("Models file not found at %s. Auto-creating file...", mapFilePath);
         
         new String:sConfigDir[PLATFORM_MAX_PATH];
