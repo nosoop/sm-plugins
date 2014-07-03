@@ -21,7 +21,7 @@
 #include <adminmenu>
 
 // Plugin version.
-#define PLUGIN_VERSION          "1.9.6"
+#define PLUGIN_VERSION          "1.9.7"
 
 // Default prop command name.
 #define PROP_COMMAND            "sm_prop"
@@ -367,7 +367,7 @@ PropPlayer(client) {
     KillClientOwnedEntity(client, "tf_powerup_bottle", "CTFPowerupBottle");
     
     // And remove Demo shields.  Buggy sometimes, though.
-    KillClientOwnedEntity(client, "tf_wearable_item_demoshield", "CTFWearableItemDemoShield");
+    KillClientOwnedEntity(client, "tf_wearable_demoshield", "CTFWearableDemoShield");
     
     // Force prop speed.
     if (g_iPropSpeed != PROP_NO_CUSTOM_SPEED) {
