@@ -19,7 +19,7 @@
 #include <adminmenu>
 
 // Plugin version.
-#define PLUGIN_VERSION "1.7.2"
+#define PLUGIN_VERSION "1.8.0"
 
 // Default prop command name.
 #define PROP_COMMAND            "sm_prop"
@@ -71,6 +71,7 @@ new bool:g_bIsProp[MAXPLAYERS+1] = { false, ... };
 new bool:g_bIsInThirdperson[MAXPLAYERS+1] = { false, ... };
 new bool:g_bIsPropLocked[MAXPLAYERS+1] = { false, ... };
 new bool:g_bRecentlySetPropLock[MAXPLAYERS+1] = { false, ... };
+new bool:g_bRecentlySetThirdPerson[MAXPLAYERS+1] = { false, ... };
 
 new bool:g_bIsPlayerAdmin[MAXPLAYERS + 1] = { false, ... };
 new bool:g_bIsEnabled = true;
@@ -316,12 +317,11 @@ public Action:Timer_EquipProps(Handle:timer) {
                 TF2_RespawnPlayer(x);
                 PropPlayer(x);
                 
-                SetThirdPerson(client, true, true);
+                SetThirdPerson(x, true, true);
             }
             continue;
         }
 
-        
         if(IsPlayerAlive(x)) {
             PropPlayer(x);
         }
@@ -394,6 +394,9 @@ UnpropPlayer(client, bool:respawn = false) {
     // Reset speed to default.
     TF2_StunPlayer(client, 0.0, 0.0, TF_STUNFLAG_SLOWDOWN);
     
+    // Reset viewmodel.
+    SetEntProp(client, Prop_Send, "m_bDrawViewmodel", 1);
+    
     // If respawn is set, return their weapons.
     if (respawn) {
         // Store position, angle, and velocity before respawning.
@@ -456,20 +459,30 @@ public Action:Command_Thirdperson(client, args) {
 // Enables and disables third-person mode.
 // Source: https://forums.alliedmods.net/showthread.php?p=1694178?p=1694178
 // TODO Option to spoof cheats and thirdperson on a client that spawns post-round end?
-SetThirdPerson(client, bool:bEnabled, bool:bSpoofCheats = false) {
+SetThirdPerson(client, bool:bEnabled, bool:bUseDirtyHack = false) {
     if (!g_bIsProp[client]) {
         return;
     }
     
-    SetVariantInt(bEnabled ? 1 : 0);
-    AcceptEntityInput(client, "SetForcedTauntCam");
+    SetEntProp(client, Prop_Send, "m_bDrawViewmodel", 0);
     
-    if (bSpoofCheats && bEnabled) {
-        if (SendConVarValue(client, FindConVar("sv_cheats"), "1")) {
-            LogMessage("Successfully spoofed cheats on client %d.", client);
-            ClientCommand(client, "thirdperson");
-            SendConVarValue(client, FindConVar("sv_cheats"), "0");
-        }
+    if (!bUseDirtyHack) {
+        // Default behavior.
+        SetVariantInt(bEnabled ? 1 : 0);
+        AcceptEntityInput(client, "SetForcedTauntCam");
+    } else {
+        // Prepare to use dirty hack by forcing first-person mode otherwise.
+        SetVariantInt(bEnabled ? 1 : 0);
+        AcceptEntityInput(client, "SetForcedTauntCam");
+        ClientCommand(client, "firstperson");
+    
+        /**
+         * Can't force third-person mode through the taunt camera during humiliation,
+         * so we will use some entity dickery to simulate third-person mode.
+         */
+        SetEntPropEnt(client, Prop_Send, "m_hObserverTarget", bEnabled ? -1 : client);
+        SetEntProp(client, Prop_Send, "m_iObserverMode", bEnabled ? 1 : 0);
+        SetEntProp(client, Prop_Send, "m_iFOV", bEnabled ? 110 : 90);
     }
     
     g_bIsInThirdperson[client] = bEnabled;
@@ -488,6 +501,18 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
                 // Lock in the proplock settings, as this will be run while +attack is held.
                 g_bRecentlySetPropLock[client] = true;
                 CreateTimer(1.0, UnsetPropLockToggleDelay, client);
+            }
+        }
+        
+        if ((buttons & IN_ATTACK2) == IN_ATTACK2) {
+            if (!g_bRecentlySetThirdPerson[client]) {
+                // Toggle proplock state.
+                SetThirdPerson(client, !g_bIsInThirdperson[client], g_bBonusRound);
+                PrintHintText(client, "%s third person mode.", g_bIsInThirdperson[client] ? "Enabled" : "Disabled");
+                
+                // Lock in the proplock settings, as this will be run while +attack is held.
+                g_bRecentlySetThirdPerson[client] = true;
+                CreateTimer(1.0, UnsetThirdPersonToggleDelay, client);
             }
         }
         
@@ -536,6 +561,11 @@ SetPropLockState(client, bool:bPropLocked) {
 public Action:UnsetPropLockToggleDelay(Handle:timer, any:client) {
     // Clear lock on proplock settings.
 	g_bRecentlySetPropLock[client] = false;
+}
+
+public Action:UnsetThirdPersonToggleDelay(Handle:timer, any:client) {
+    // Clear lock on third-person mode.
+	g_bRecentlySetThirdPerson[client] = false;
 }
 
 // Credit to pheadxdll and FoxMulder for invisibility code.
