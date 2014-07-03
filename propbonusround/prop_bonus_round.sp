@@ -19,7 +19,7 @@
 #include <adminmenu>
 
 // Plugin version.
-#define PLUGIN_VERSION "1.8.1"
+#define PLUGIN_VERSION "1.8.2"
 
 // Default prop command name.
 #define PROP_COMMAND            "sm_prop"
@@ -135,12 +135,7 @@ public OnPluginStart() {
     RegAdminCmd(PROP_COMMAND, Command_Propplayer, ADMFLAG_BAN, "sm_prop <#userid|name> - toggles prop on a player");
 
     // Hook round events to set and unset props.
-    HookEvent("teamplay_round_start", Hook_RoundStart, EventHookMode_Post);
-    HookEvent("teamplay_round_win", Hook_RoundWin, EventHookMode_Post);
-    
-    // Hook player events to unset prop on death and remove prop on player when hit if desired.
-    HookEvent("player_death", Hook_Playerdeath, EventHookMode_Post);
-    HookEvent("player_hurt", Hook_PlayerHurt, EventHookMode_Post);
+    HookPropBonusRoundPluginEvents(true);
 
     // Attach player prop option to menu.
     new Handle:topmenu;
@@ -150,6 +145,24 @@ public OnPluginStart() {
     
     AutoExecConfig(true, "plugin.propbonusround");
     CreateThirdpersonCommands();
+}
+
+HookPropBonusRoundPluginEvents(bool:bHook) {
+    if (bHook) {
+        // Hook round events to set and unset props.
+        HookEvent("teamplay_round_start", Hook_RoundStart, EventHookMode_Post);
+        HookEvent("teamplay_round_win", Hook_RoundWin, EventHookMode_Post);
+        
+        // Hook player events to unset prop on death and remove prop on player when hit if desired.
+        HookEvent("player_death", Hook_Playerdeath, EventHookMode_Post);
+        HookEvent("player_hurt", Hook_PlayerHurt, EventHookMode_Post);
+    } else {
+        // Unhook events.
+        UnhookEvent("teamplay_round_start", Hook_RoundStart, EventHookMode_Post);
+        UnhookEvent("teamplay_round_win", Hook_RoundWin, EventHookMode_Post);
+        UnhookEvent("player_death", Hook_Playerdeath, EventHookMode_Post);
+        UnhookEvent("player_hurt", Hook_PlayerHurt, EventHookMode_Post);
+    }
 }
 
 public OnClientPostAdminCheck(client) {
@@ -955,25 +968,17 @@ stock bool:IsEntLimitReached() {
 
 public Cvars_Changed(Handle:convar, const String:oldValue[], const String:newValue[]) {
     if(convar == Cvar_Enabled) {
-        if(StringToInt(newValue) == 0) {
-            g_bIsEnabled = false;
-            UnhookEvent("teamplay_round_start", Hook_RoundStart, EventHookMode_Post);
-            UnhookEvent("teamplay_round_win", Hook_RoundWin, EventHookMode_Post);
-            UnhookEvent("player_death", Hook_Playerdeath, EventHookMode_Post);
-            UnhookEvent("player_hurt", Hook_PlayerHurt, EventHookMode_Post);
-            for(new x = 1; x <= MaxClients; x++) {
+        g_bIsEnabled = StringToInt(newValue) != 0;
+        HookPropBonusRoundPluginEvents(g_bIsEnabled);
+            
+        if (!g_bIsEnabled) {
+            for (new x = 1; x <= MaxClients; x++) {
                 if(IsClientInGame(x) && IsPlayerAlive(x)) {
                     if(g_bIsProp[x]) {
                         UnpropPlayer(x);
                     }
                 }
             }
-        } else {
-            g_bIsEnabled = true;
-            HookEvent("teamplay_round_start", Hook_RoundStart, EventHookMode_Post);
-            HookEvent("teamplay_round_win", Hook_RoundWin, EventHookMode_Post);
-            HookEvent("player_death", Hook_Playerdeath, EventHookMode_Post);
-            HookEvent("player_hurt", Hook_PlayerHurt, EventHookMode_Post);
         }
     } else if(convar == Cvar_ThirdPerson) {
         g_thirdpersonCvar = StringToInt(newValue);
