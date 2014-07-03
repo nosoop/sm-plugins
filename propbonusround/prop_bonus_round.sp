@@ -6,8 +6,10 @@
  *
  * Credits to: strontiumdog for the idea based off his DODS version.
  * Credits to: Antithasys for SMC Parser/SM auto-cmds code and much help!
- * 
+ *
  * 1.0.0 - Forked from https://forums.alliedmods.net/showthread.php?p=1096024
+ * Forked version was 1.3 in the original post.
+ *
  * See the commits to https://github.com/nosoop/sm-plugins for updated notes.
  */
 
@@ -19,14 +21,10 @@
 #include <adminmenu>
 
 // Plugin version.
-#define PLUGIN_VERSION          "1.9.5"
+#define PLUGIN_VERSION          "1.9.6"
 
 // Default prop command name.
 #define PROP_COMMAND            "sm_prop"
-
-// RGBA values for item coloration, as a fallback.
-#define INVIS					{255,255,255,0}
-#define NORMAL					{255,255,255,255}
 
 // Special value of sm_propbonus_forcespeed that disables the speed override.
 // Do not change, as it so happens that a speed of 0 does not work anywhere else.
@@ -342,7 +340,6 @@ PropPlayer(client) {
     GetArrayString(g_hModelPaths, iModelIndex, sPath, sizeof(sPath));
     
     g_bIsProp[client] = true;
-    Colorize(client, INVIS);
 
     // Set to prop model.
     SetVariantString(sPath);
@@ -357,6 +354,8 @@ PropPlayer(client) {
     
     // Strip weapons from propped player.
     StripWeapons(client);
+    
+    SetDemomanEyeGlow(client, false);
     
     // Hide viewmodels for cleanliness.  We don't have any weapons, so it's fine.
     SetEntProp(client, Prop_Send, "m_bDrawViewmodel", 0);
@@ -382,20 +381,9 @@ PropPlayer(client) {
     return iModelIndex;
 }
 
-KillClientOwnedEntity(client, const String:sEntityName[], const String:sServerEntityName[]) {
-    new ent = -1;
-    while((ent = FindEntityByClassname(ent, sEntityName)) != -1) {      
-        if (GetEntDataEnt2(ent, FindSendPropOffs(sServerEntityName, "m_hOwnerEntity")) == client) {
-            AcceptEntityInput(ent, "Kill");
-        }
-    }
-}
-
 // Turns a client into a not-prop.
 // The only reason to respawn them is to return weapons to them on unprop (in the case of toggling).
 UnpropPlayer(client, bool:respawn = false) {
-    Colorize(client, NORMAL);
-    
     // Clear custom model.
     if (IsValidEntity(client)) {
         SetVariantString("");
@@ -437,6 +425,31 @@ UnpropPlayer(client, bool:respawn = false) {
         // Return health and position.
         SetEntityHealth(client, iHealth);
         TeleportEntity(client, origin, angle, velocity);
+    }
+}
+
+KillClientOwnedEntity(client, const String:sEntityName[], const String:sServerEntityName[]) {
+    new ent = -1;
+    while((ent = FindEntityByClassname(ent, sEntityName)) != -1) {      
+        if (GetEntDataEnt2(ent, FindSendPropOffs(sServerEntityName, "m_hOwnerEntity")) == client) {
+            AcceptEntityInput(ent, "Kill");
+        }
+    }
+}
+
+SetDemomanEyeGlow(client, bool:enable) {
+    new TFClassType:class = TF2_GetPlayerClass(client);
+    if (class == TFClass_DemoMan) {
+        new decapitations = GetEntProp(client, Prop_Send, "m_iDecapitations");
+        if (decapitations >= 1) {
+            if(!enable) {
+                //Removes Glowing Eye
+                TF2_RemoveCondition(client, TFCond_DemoBuff);
+            } else {
+                //Add Glowing Eye
+                TF2_AddCondition(client, TFCond_DemoBuff, -1.0);
+            }
+        }
     }
 }
 
@@ -573,51 +586,6 @@ public Action:UnsetPropLockToggleDelay(Handle:timer, any:client) {
 public Action:UnsetThirdPersonToggleDelay(Handle:timer, any:client) {
     // Clear lock on third-person mode.
 	g_bRecentlySetThirdPerson[client] = false;
-}
-
-// Credit to pheadxdll and FoxMulder for invisibility code.
-Colorize(client, color[4]) {	
-    new bool:type;
-    new TFClassType:class = TF2_GetPlayerClass(client);
-    
-    //Colorize the wearables, such as hats
-    SetWearablesRGBA_Impl(client, "tf_wearable", "CTFWearable", color);
-    
-    if(color[3] > 0)
-        type = true;
-
-    if(class == TFClass_DemoMan) {
-        SetWearablesRGBA_Impl(client, "tf_wearable_item_demoshield", "CTFWearableItemDemoShield", color);
-        SetGlowingEyes(client, type);
-    }
-
-    return;
-}
-
-// Set entity class color based on having a client as parent.
-SetWearablesRGBA_Impl(client,  const String:entClass[], const String:serverClass[], color[4]) {
-    new ent = -1;
-    while((ent = FindEntityByClassname(ent, entClass)) != -1) {
-        if(IsValidEntity(ent)) {		
-            if(GetEntDataEnt2(ent, FindSendPropOffs(serverClass, "m_hOwnerEntity")) == client) {
-                SetEntityRenderMode(ent, RENDER_TRANSCOLOR);
-                SetEntityRenderColor(ent, color[0], color[1], color[2], color[3]);
-            }
-        }
-    }
-}
-
-SetGlowingEyes(client, bool:enable) {
-    new decapitations = GetEntProp(client, Prop_Send, "m_iDecapitations");
-    if (decapitations >= 1) {
-        if(!enable) {
-            //Removes Glowing Eye
-            TF2_RemoveCondition(client, TFCond_DemoBuff);
-        } else {
-            //Add Glowing Eye
-            TF2_AddCondition(client, TFCond_DemoBuff, -1.0);
-        }
-    }
 }
 
 // Credit for SMC Parser related code goes to Antithasys!
