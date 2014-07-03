@@ -19,7 +19,7 @@
 #include <adminmenu>
 
 // Plugin version.
-#define PLUGIN_VERSION "1.9.1"
+#define PLUGIN_VERSION "1.9.2"
 
 // Default prop command name.
 #define PROP_COMMAND            "sm_prop"
@@ -35,9 +35,6 @@
 // Base configuration file.
 #define PROPCONFIG_BASE         "base"
 
-// Key in the proplist whose value contains a space-delimited list of files to import.
-#define INCLUDE_PROPLIST_KEY    "#include"
-
 // Constants for sections of the configuration.
 #define PROPCONFIG_ROOT         0
 #define PROPCONFIG_PROPLIST     1
@@ -49,11 +46,6 @@
 
 new Handle:hAdminMenu = INVALID_HANDLE;
 new Handle:Cvar_AdminFlag = INVALID_HANDLE;
-new Handle:Cvar_AdminOnly = INVALID_HANDLE;
-new Handle:Cvar_Enabled = INVALID_HANDLE;
-new Handle:Cvar_HitRemoveProp = INVALID_HANDLE;
-new Handle:Cvar_Announcement = INVALID_HANDLE;
-new Handle:Cvar_Respawnplayer = INVALID_HANDLE;
 
 // Arrays for prop models, names, and an list of additional files to load.
 new g_iPropListSection = PROPCONFIG_ROOT;
@@ -61,14 +53,13 @@ new Handle:g_hModelNames = INVALID_HANDLE;
 new Handle:g_hModelPaths = INVALID_HANDLE;
 new Handle:g_hIncludePropLists = INVALID_HANDLE;
 
-new g_adminonlyCvar;
-new g_hitremovePropCvar;
-new g_announcementCvar;
-new g_respawnplayerCvar;
-new g_winnerTeam;
-
-new Handle:Cvar_PropSpeed = INVALID_HANDLE;
-new g_iPropSpeed;
+// ConVars and junk.  For references, see OnPluginStart().
+new Handle:g_hCPluginEnabled = INVALID_HANDLE,      bool:g_bPluginEnabled;      // sm_propbonus_enabled
+new Handle:g_hCAdminOnly = INVALID_HANDLE,          bool:g_bAdminOnly;          // sm_propbonus_adminonly
+new Handle:g_hCHumiliationRespawn = INVALID_HANDLE, bool:g_bHumiliationRespawn; // sm_propbonus_forcespawn
+new Handle:g_hCDmgUnprops = INVALID_HANDLE,         bool:g_bDmgUnprops;         // sm_propbonus_damageunprops
+new Handle:g_hCAnnouncePropRound = INVALID_HANDLE,  bool:g_bAnnouncePropRound;  // sm_propbonus_announcement
+new Handle:g_hCPropSpeed = INVALID_HANDLE,          g_iPropSpeed;               // sm_propbonus_forcespeed
 
 // Boolean flags for prop functions.
 new bool:g_bIsProp[MAXPLAYERS+1] = { false, ... };
@@ -78,10 +69,10 @@ new bool:g_bRecentlySetPropLock[MAXPLAYERS+1] = { false, ... };
 new bool:g_bRecentlySetThirdPerson[MAXPLAYERS+1] = { false, ... };
 
 new bool:g_bIsPlayerAdmin[MAXPLAYERS + 1] = { false, ... };
-new bool:g_bIsEnabled = true;
 
-// Whether or not we are currently in humiliation mode.
+// Humiliation mode handling.
 new bool:g_bBonusRound = false;
+new g_iWinningTeam;
 
 new String:g_sCharAdminFlag[32];
 
@@ -98,35 +89,33 @@ public OnPluginStart() {
 
     CreateConVar("sm_propbonus_version", PLUGIN_VERSION, "Version of Prop Bonus Round", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_DONTRECORD);
     
-    /**
-     * Create and hook cvars.
-     */
+    // Create and hook cvars.
     // sm_propbonus_enabled
-    Cvar_Enabled = CreateConVar("sm_propbonus_enabled", "1", "Enable/Disable prop bonus round plugin.");
-    HookConVarChange(Cvar_Enabled, Cvars_Changed);
+    g_hCPluginEnabled = CreateConVar("sm_propbonus_enabled", "1", "Enable/Disable prop bonus round plugin.");
+    HookConVarChange(g_hCPluginEnabled, Cvars_Changed);
     
     // sm_propbonus_adminonly
-    Cvar_AdminOnly = CreateConVar("sm_propbonus_adminonly", "0", "Enable plugin for admins only?");
-    HookConVarChange(Cvar_AdminOnly, Cvars_Changed);
+    g_hCAdminOnly = CreateConVar("sm_propbonus_adminonly", "0", "Enable plugin for admins only?");
+    HookConVarChange(g_hCAdminOnly, Cvars_Changed);
     
     // sm_propbonus_flag
     Cvar_AdminFlag = CreateConVar("sm_propbonus_flag", "b", "Admin flag to use if adminonly is enabled (only one).  Must be a in char format.");
     
     // sm_propbonus_announcement
-    Cvar_Announcement = CreateConVar("sm_propbonus_announcement", "1", "Public announcement msg at start of bonus round?");
-    HookConVarChange(Cvar_Announcement, Cvars_Changed);
+    g_hCAnnouncePropRound = CreateConVar("sm_propbonus_announcement", "1", "Public announcement msg at start of bonus round?");
+    HookConVarChange(g_hCAnnouncePropRound, Cvars_Changed);
 
-    // sm_propbonus_removeproponhit
-    Cvar_HitRemoveProp = CreateConVar("sm_propbonus_removeproponhit", "0", "Remove player prop once they take damage?");
-    HookConVarChange(Cvar_HitRemoveProp, Cvars_Changed);
+    // sm_propbonus_damageunprops
+    g_hCDmgUnprops = CreateConVar("sm_propbonus_damageunprops", "0", "Remove player prop once they take damage?");
+    HookConVarChange(g_hCDmgUnprops, Cvars_Changed);
 
-    // sm_propbonus_respawndead
-    Cvar_Respawnplayer = CreateConVar("sm_propbonus_respawndead", "0", "Respawn dead players at start of bonusround?");
-    HookConVarChange(Cvar_Respawnplayer, Cvars_Changed);
+    // sm_propbonus_forcespawn
+    g_hCHumiliationRespawn = CreateConVar("sm_propbonus_forcespawn", "0", "Respawn dead players at start of bonusround?");
+    HookConVarChange(g_hCHumiliationRespawn, Cvars_Changed);
     
     // Prop speed.
-    Cvar_PropSpeed = CreateConVar("sm_propbonus_forcespeed", "0", "Force all props to a specific speed, in an integer representing HU/s.  Setting this to 0 allows props to move at default speed.");
-    HookConVarChange(Cvar_PropSpeed, Cvars_Changed);
+    g_hCPropSpeed = CreateConVar("sm_propbonus_forcespeed", "0", "Force all props to a specific speed, in an integer representing HU/s.  Setting this to 0 allows props to move at default speed.");
+    HookConVarChange(g_hCPropSpeed, Cvars_Changed);
 
     // Command to prop a player.
     RegAdminCmd(PROP_COMMAND, Command_Propplayer, ADMFLAG_BAN, "sm_prop <#userid|name> - toggles prop on a player");
@@ -171,13 +160,13 @@ public OnClientPostAdminCheck(client) {
 public OnConfigsExecuted() {
     g_bBonusRound = false;
 
-    g_bIsEnabled = GetConVarBool(Cvar_Enabled);
+    g_bPluginEnabled = GetConVarBool(g_hCPluginEnabled);
     GetConVarString(Cvar_AdminFlag, g_sCharAdminFlag, sizeof(g_sCharAdminFlag));
 
-    g_hitremovePropCvar = GetConVarInt(Cvar_HitRemoveProp);
-    g_adminonlyCvar = GetConVarInt(Cvar_AdminOnly);
-    g_announcementCvar = GetConVarInt(Cvar_Announcement);
-    g_respawnplayerCvar = GetConVarInt(Cvar_Respawnplayer);
+    g_bDmgUnprops = GetConVarInt(g_hCDmgUnprops) != 0;
+    g_bAdminOnly = GetConVarInt(g_hCAdminOnly) != 0;
+    g_bAnnouncePropRound = GetConVarInt(g_hCAnnouncePropRound) != 0;
+    g_bHumiliationRespawn = GetConVarInt(g_hCHumiliationRespawn) != 0;
 }
 
 // Client disconnect - unset client prop settings.
@@ -192,7 +181,7 @@ public OnMapStart() {
     ProcessConfigFile();
 
     //Precache all models.
-    decl String:sPath[100];
+    decl String:sPath[PLATFORM_MAX_PATH];
     for(new i = 0; i < GetArraySize(g_hModelNames); i++) {
         GetArrayString(g_hModelPaths, i, sPath, sizeof(sPath));
         PrecacheModel(sPath, true);
@@ -200,11 +189,11 @@ public OnMapStart() {
 }
 
 public Action:Command_Propplayer(client, args) {
-    if (!g_bIsEnabled) {
+    if (!g_bPluginEnabled) {
         return Plugin_Handled;
     }
 
-    decl String:target[65];
+    decl String:target[MAX_TARGET_LENGTH];
     decl String:target_name[MAX_TARGET_LENGTH];
     decl target_list[MAXPLAYERS];
     decl target_count;
@@ -235,7 +224,7 @@ public Action:Command_Propplayer(client, args) {
 }
 
 public Hook_PlayerHurt(Handle:event, const String:name[], bool:dontBroadcast) {
-    if(!g_bIsEnabled || !g_bBonusRound || !g_hitremovePropCvar)
+    if(!g_bPluginEnabled || !g_bBonusRound || !g_bDmgUnprops)
         return;
     
     new client = GetClientOfUserId(GetEventInt(event, "userid"));
@@ -251,7 +240,7 @@ public Hook_PlayerHurt(Handle:event, const String:name[], bool:dontBroadcast) {
 }
 
 public Hook_Playerdeath(Handle:event, const String:name[], bool:dontBroadcast) {
-    if(!g_bIsEnabled)
+    if(!g_bPluginEnabled)
         return;
 
     new deathflags = GetEventInt(event, "death_flags");
@@ -271,7 +260,7 @@ public Hook_Playerdeath(Handle:event, const String:name[], bool:dontBroadcast) {
 
 // Event hook for round start.
 public Hook_RoundStart(Handle:event, const String:name[], bool:dontBroadcast) {
-    if(!g_bIsEnabled)
+    if(!g_bPluginEnabled)
         return;
 
     // Unprop all propped players.
@@ -289,14 +278,14 @@ public Hook_RoundStart(Handle:event, const String:name[], bool:dontBroadcast) {
 }
 
 public Hook_RoundWin(Handle:event, const String:name[], bool:dontBroadcast) {
-    if(!g_bIsEnabled)
+    if(!g_bPluginEnabled)
         return;
 
     g_bBonusRound = true;
-    g_winnerTeam = GetEventInt(event, "team");
+    g_iWinningTeam = GetEventInt(event, "team");
     
-    if(!IsEntLimitReached()) {
-        if(g_announcementCvar) {
+    if (!IsEntLimitReached()) {
+        if (g_bAnnouncePropRound) {
             PrintToChatAll("\x01\x04-------------------------------------------\x01");
             PrintToChatAll("\x01\x04**Round-End Prop Hunt ACTIVE!**\x01");
             PrintToChatAll("\x01\x04-------------------------------------------\x01");
@@ -312,7 +301,7 @@ public Action:Timer_EquipProps(Handle:timer) {
             continue;
         }
         
-        if(GetClientTeam(x) == g_winnerTeam) {
+        if(GetClientTeam(x) == g_iWinningTeam) {
             continue;
         }
                 
@@ -322,12 +311,12 @@ public Action:Timer_EquipProps(Handle:timer) {
         }
         
         //If admin only cvar is enabled and not admin, skip id.
-        if (g_adminonlyCvar && !g_bIsPlayerAdmin[x]) {
+        if (g_bAdminOnly && !g_bIsPlayerAdmin[x]) {
             continue;
         }
         
         if (!IsPlayerAlive(x)) {
-            if (g_respawnplayerCvar) {
+            if (g_bHumiliationRespawn) {
                 TF2_RespawnPlayer(x);
                 PropPlayer(x);
                 
@@ -392,17 +381,20 @@ PropPlayer(client) {
 // The only reason to respawn them is to return weapons to them on unprop (in the case of toggling).
 UnpropPlayer(client, bool:respawn = false) {
     Colorize(client, NORMAL);
-    RemovePropModel(client);
+    
+    // Clear custom model.
+    if (IsValidEntity(client)) {
+        SetVariantString("");
+        AcceptEntityInput(client, "SetCustomModel");
+    }
     
     if(g_bIsInThirdperson[client])	{
         SetThirdPerson(client, false);
     }
     
-    // Clear proplock flag.
-    g_bIsPropLocked[client] = false;
-    
-    // Clear prop flag.
+    // Clear prop and proplock flag.
     g_bIsProp[client] = false;
+    g_bIsPropLocked[client] = false;
     
     // Reset speed to default.
     TF2_StunPlayer(client, 0.0, 0.0, TF_STUNFLAG_SLOWDOWN);
@@ -604,8 +596,8 @@ SetWearablesRGBA_Impl(client,  const String:entClass[], const String:serverClass
 // Attempt to remove client wearables. ... this may or may not be a terrible idea.
 RemoveWearables(client) {
     new ent = -1;
-    while((ent = FindEntityByClassname(ent, "tf_wearable")) != -1) {
-        if(IsValidEntity(ent)) {		
+    while ((ent = FindEntityByClassname(ent, "tf_wearable")) != -1) {
+        if (IsValidEntity(ent)) {		
             if(GetEntDataEnt2(ent, FindSendPropOffs("CTFWearable", "m_hOwnerEntity")) == client) {
                 AcceptEntityInput(ent, "Kill");
             }
@@ -615,7 +607,7 @@ RemoveWearables(client) {
 
 SetGlowingEyes(client, bool:enable) {
     new decapitations = GetEntProp(client, Prop_Send, "m_iDecapitations");
-    if(decapitations >= 1) {
+    if (decapitations >= 1) {
         if(!enable) {
             //Removes Glowing Eye
             TF2_RemoveCond(client, 18);
@@ -886,15 +878,6 @@ StripWeapons(client) {
     }
 }
 
-RemovePropModel(client) {
-    if(IsValidEntity(client)) {
-        SetVariantString("");
-        AcceptEntityInput(client, "SetCustomModel");
-        
-        g_bIsProp[client] = false;
-    }
-}
-
 CheckGame() {
     new String:strGame[10];
     GetGameFolderName(strGame, sizeof(strGame));
@@ -947,11 +930,11 @@ stock bool:IsEntLimitReached() {
 }
 
 public Cvars_Changed(Handle:convar, const String:oldValue[], const String:newValue[]) {
-    if(convar == Cvar_Enabled) {
-        g_bIsEnabled = StringToInt(newValue) != 0;
-        HookPropBonusRoundPluginEvents(g_bIsEnabled);
+    if(convar == g_hCPluginEnabled) {
+        g_bPluginEnabled = StringToInt(newValue) != 0;
+        HookPropBonusRoundPluginEvents(g_bPluginEnabled);
         
-        if (!g_bIsEnabled) {
+        if (!g_bPluginEnabled) {
             // Unprop and respawn the player when the plugin is disabled dynamically.
             for (new x = 1; x <= MaxClients; x++) {
                 if(IsClientInGame(x) && IsPlayerAlive(x)) {
@@ -961,15 +944,15 @@ public Cvars_Changed(Handle:convar, const String:oldValue[], const String:newVal
                 }
             }
         }
-    } else if(convar == Cvar_HitRemoveProp) {
-        g_hitremovePropCvar = StringToInt(newValue);
-    } else if(convar == Cvar_AdminOnly) {
-        g_adminonlyCvar = StringToInt(newValue);
-    } else if(convar == Cvar_Announcement) {
-        g_announcementCvar = StringToInt(newValue);
-    } else if(convar == Cvar_Respawnplayer) {
-        g_respawnplayerCvar = StringToInt(newValue);
-    } else if(convar == Cvar_PropSpeed) {
+    } else if(convar == g_hCDmgUnprops) {
+        g_bDmgUnprops = StringToInt(newValue) != 0;
+    } else if(convar == g_hCAdminOnly) {
+        g_bAdminOnly = StringToInt(newValue) != 0;
+    } else if(convar == g_hCAnnouncePropRound) {
+        g_bAnnouncePropRound = StringToInt(newValue) != 0;
+    } else if(convar == g_hCHumiliationRespawn) {
+        g_bHumiliationRespawn = StringToInt(newValue) != 0;
+    } else if(convar == g_hCPropSpeed) {
         g_iPropSpeed = StringToInt(newValue);
     }
 }
