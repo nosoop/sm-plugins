@@ -21,7 +21,7 @@
 #include <adminmenu>
 
 // Plugin version.
-#define PLUGIN_VERSION          "1.9.7"
+#define PLUGIN_VERSION          "1.10.0"
 
 // Default prop command name.
 #define PROP_COMMAND            "sm_prop"
@@ -88,36 +88,30 @@ public OnPluginStart() {
     CreateConVar("sm_propbonus_version", PLUGIN_VERSION, "Version of Prop Bonus Round", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_DONTRECORD);
     
     // Create and hook cvars.
-    // sm_propbonus_enabled
     g_hCPluginEnabled = CreateConVar("sm_propbonus_enabled", "1", "Enable/Disable prop bonus round plugin.");
     HookConVarChange(g_hCPluginEnabled, Cvars_Changed);
     
-    // sm_propbonus_adminonly
     g_hCAdminOnly = CreateConVar("sm_propbonus_adminonly", "0", "Enable plugin for admins only?");
     HookConVarChange(g_hCAdminOnly, Cvars_Changed);
     
-    // sm_propbonus_flag
     Cvar_AdminFlag = CreateConVar("sm_propbonus_flag", "b", "Admin flag to use if adminonly is enabled (only one).  Must be a in char format.");
     
-    // sm_propbonus_announcement
     g_hCAnnouncePropRound = CreateConVar("sm_propbonus_announcement", "1", "Public announcement msg at start of bonus round?");
     HookConVarChange(g_hCAnnouncePropRound, Cvars_Changed);
 
-    // sm_propbonus_damageunprops
     g_hCDmgUnprops = CreateConVar("sm_propbonus_damageunprops", "0", "Remove player prop once they take damage?");
     HookConVarChange(g_hCDmgUnprops, Cvars_Changed);
 
-    // sm_propbonus_forcespawn
     g_hCHumiliationRespawn = CreateConVar("sm_propbonus_forcespawn", "0", "Respawn dead players at start of bonusround?");
     HookConVarChange(g_hCHumiliationRespawn, Cvars_Changed);
     
-    // Prop speed.
     g_hCPropSpeed = CreateConVar("sm_propbonus_forcespeed", "0", "Force all props to a specific speed, in an integer representing HU/s.  Setting this to 0 allows props to move at default speed.");
     HookConVarChange(g_hCPropSpeed, Cvars_Changed);
 
     // Command to prop a player.
     RegAdminCmd(PROP_COMMAND, Command_Propplayer, ADMFLAG_BAN, "sm_prop <#userid|name> - toggles prop on a player");
-
+    RegAdminCmd("sm_propbonus_reloadlist", Command_ReloadPropList, ADMFLAG_ROOT, "sm_propbonus_reloadlist - reloads list of props");
+    
     // Hook round events to set and unset props.
     HookPropBonusRoundPluginEvents(true);
 
@@ -186,41 +180,6 @@ public OnMapStart() {
     }
 }
 
-public Action:Command_Propplayer(client, args) {
-    if (!g_bPluginEnabled) {
-        return Plugin_Handled;
-    }
-
-    decl String:target[MAX_TARGET_LENGTH];
-    decl String:target_name[MAX_TARGET_LENGTH];
-    decl target_list[MAXPLAYERS];
-    decl target_count;
-    decl bool:tn_is_ml;
-    
-    if (args < 1) {
-        ReplyToCommand(client, "[SM] Usage: sm_prop <#userid|name>");
-        return Plugin_Handled;
-    }
-    
-    GetCmdArg(1, target, sizeof(target));
-    
-    if((target_count = ProcessTargetString(target, client, target_list, 
-            MAXPLAYERS, 0, target_name, sizeof(target_name), tn_is_ml)) <= 0) {
-        ReplyToTargetError(client, target_count);
-        return Plugin_Handled;
-    }
-    
-    for(new i = 0; i < target_count; i++) {
-        if(IsClientInGame(target_list[i]) && IsPlayerAlive(target_list[i])) {
-            PerformPropPlayer(client, target_list[i], target_count == 1);
-        }
-    }
-    if (target_count > 1) {
-        ShowActivity(client, " Toggled prop on %N", target_name);
-    }
-    return Plugin_Handled;
-}
-
 public Hook_PlayerHurt(Handle:event, const String:name[], bool:dontBroadcast) {
     if(!g_bPluginEnabled || !g_bBonusRound || !g_bDmgUnprops)
         return;
@@ -256,7 +215,6 @@ public Hook_Playerdeath(Handle:event, const String:name[], bool:dontBroadcast) {
     }
 }
 
-// Event hook for round start.
 public Hook_RoundStart(Handle:event, const String:name[], bool:dontBroadcast) {
     if(!g_bPluginEnabled)
         return;
@@ -330,6 +288,42 @@ public Action:Timer_EquipProps(Handle:timer) {
     return Plugin_Handled;
 }
 
+// Toggles prop status on a player.
+public Action:Command_Propplayer(client, args) {
+    if (!g_bPluginEnabled) {
+        return Plugin_Handled;
+    }
+
+    decl String:target[MAX_TARGET_LENGTH];
+    decl String:target_name[MAX_TARGET_LENGTH];
+    decl target_list[MAXPLAYERS];
+    decl target_count;
+    decl bool:tn_is_ml;
+    
+    if (args < 1) {
+        ReplyToCommand(client, "[SM] Usage: sm_prop <#userid|name>");
+        return Plugin_Handled;
+    }
+    
+    GetCmdArg(1, target, sizeof(target));
+    
+    if((target_count = ProcessTargetString(target, client, target_list, 
+            MAXPLAYERS, 0, target_name, sizeof(target_name), tn_is_ml)) <= 0) {
+        ReplyToTargetError(client, target_count);
+        return Plugin_Handled;
+    }
+    
+    for(new i = 0; i < target_count; i++) {
+        if(IsClientInGame(target_list[i]) && IsPlayerAlive(target_list[i])) {
+            PerformPropPlayer(client, target_list[i], target_count == 1);
+        }
+    }
+    if (target_count > 1) {
+        ShowActivity(client, " Toggled prop on %N", target_name);
+    }
+    return Plugin_Handled;
+}
+
 // Turns a client into a prop.  Return value is the index value of the prop selected.
 PropPlayer(client) {
     // GetRandomInt is inclusive.
@@ -381,8 +375,7 @@ PropPlayer(client) {
     return iModelIndex;
 }
 
-// Turns a client into a not-prop.
-// The only reason to respawn them is to return weapons to them on unprop (in the case of toggling).
+// Turns a client into a not-prop.  The only reason to respawn them is to return weapons to them on unprop (in the case of toggling).
 UnpropPlayer(client, bool:respawn = false) {
     // Clear custom model.
     if (IsValidEntity(client)) {
@@ -453,8 +446,7 @@ SetDemomanEyeGlow(client, bool:enable) {
     }
 }
 
-// Action to prop a player.
-// Do not show activity here if targetting multiple players.
+// Action to prop a player.  Do not show activity here if targetting multiple players.
 PerformPropPlayer(client, target, bool:bShowActivity = true) {
     if(!IsClientInGame(target) || !IsPlayerAlive(target))
         return;
@@ -475,8 +467,6 @@ PerformPropPlayer(client, target, bool:bShowActivity = true) {
 }
 
 // Enables and disables third-person mode.
-// Source (default): https://forums.alliedmods.net/showthread.php?p=1694178?p=1694178
-// Dirty hack sourced from the original plugin.
 SetThirdPerson(client, bool:bEnabled, bool:bUseDirtyHack = false) {
     if (!g_bIsProp[client]) {
         return;
@@ -484,6 +474,7 @@ SetThirdPerson(client, bool:bEnabled, bool:bUseDirtyHack = false) {
     
     if (!bUseDirtyHack) {
         // Default behavior.
+        // Source: https://forums.alliedmods.net/showthread.php?p=1694178?p=1694178
         SetVariantInt(bEnabled ? 1 : 0);
         AcceptEntityInput(client, "SetForcedTauntCam");
     } else {
@@ -507,7 +498,7 @@ SetThirdPerson(client, bool:bEnabled, bool:bUseDirtyHack = false) {
     g_bIsInThirdperson[client] = bEnabled;
 }
 
-// Global forward to test if a client wants to enable proplock.
+// Global forward to test if a client wants to toggle proplock or third-person mode.
 public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:angles[3], &weapon) {
     // Only run the checks when the client is a prop.
     if (g_bIsProp[client]) {
@@ -586,6 +577,17 @@ public Action:UnsetPropLockToggleDelay(Handle:timer, any:client) {
 public Action:UnsetThirdPersonToggleDelay(Handle:timer, any:client) {
     // Clear lock on third-person mode.
 	g_bRecentlySetThirdPerson[client] = false;
+}
+
+public Action:Command_ReloadPropList(client, args) {
+    if (!g_bPluginEnabled) {
+        return Plugin_Handled;
+    }
+    
+    ProcessConfigFile();
+    ReplyToCommand(client, "[SM] %d props reloaded from prop list.", GetArraySize(g_hModelNames));
+    
+    return Plugin_Handled;
 }
 
 // Credit for SMC Parser related code goes to Antithasys!
