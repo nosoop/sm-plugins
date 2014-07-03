@@ -19,7 +19,7 @@
 #include <adminmenu>
 
 // Plugin version.
-#define PLUGIN_VERSION "1.9.0"
+#define PLUGIN_VERSION "1.9.1"
 
 // Default prop command name.
 #define PROP_COMMAND            "sm_prop"
@@ -50,8 +50,6 @@
 new Handle:hAdminMenu = INVALID_HANDLE;
 new Handle:Cvar_AdminFlag = INVALID_HANDLE;
 new Handle:Cvar_AdminOnly = INVALID_HANDLE;
-new Handle:Cvar_ThirdTriggers = INVALID_HANDLE;
-new Handle:Cvar_ThirdPerson = INVALID_HANDLE;
 new Handle:Cvar_Enabled = INVALID_HANDLE;
 new Handle:Cvar_HitRemoveProp = INVALID_HANDLE;
 new Handle:Cvar_Announcement = INVALID_HANDLE;
@@ -64,7 +62,6 @@ new Handle:g_hModelPaths = INVALID_HANDLE;
 new Handle:g_hIncludePropLists = INVALID_HANDLE;
 
 new g_adminonlyCvar;
-new g_thirdpersonCvar;
 new g_hitremovePropCvar;
 new g_announcementCvar;
 new g_respawnplayerCvar;
@@ -115,10 +112,6 @@ public OnPluginStart() {
     // sm_propbonus_flag
     Cvar_AdminFlag = CreateConVar("sm_propbonus_flag", "b", "Admin flag to use if adminonly is enabled (only one).  Must be a in char format.");
     
-    // sm_propbonus_allowtriggers
-    Cvar_ThirdPerson = CreateConVar("sm_propbonus_allowtriggers", "0", "Allow prop players thirdperson triggers?");
-    HookConVarChange(Cvar_ThirdPerson, Cvars_Changed);
-
     // sm_propbonus_announcement
     Cvar_Announcement = CreateConVar("sm_propbonus_announcement", "1", "Public announcement msg at start of bonus round?");
     HookConVarChange(Cvar_Announcement, Cvars_Changed);
@@ -135,9 +128,6 @@ public OnPluginStart() {
     Cvar_PropSpeed = CreateConVar("sm_propbonus_forcespeed", "0", "Force all props to a specific speed, in an integer representing HU/s.  Setting this to 0 allows props to move at default speed.");
     HookConVarChange(Cvar_PropSpeed, Cvars_Changed);
 
-    // Third-person toggle commands.
-    Cvar_ThirdTriggers = CreateConVar("sm_propbonus_triggers", "tp,third", "SM command triggers for thirdperson - Separated by commas. Each will have the !third, /third, sm_third associated with it.");
-    
     // Command to prop a player.
     RegAdminCmd(PROP_COMMAND, Command_Propplayer, ADMFLAG_BAN, "sm_prop <#userid|name> - toggles prop on a player");
 
@@ -151,7 +141,6 @@ public OnPluginStart() {
     }
     
     AutoExecConfig(true, "plugin.propbonusround");
-    CreateThirdpersonCommands();
 }
 
 HookPropBonusRoundPluginEvents(bool:bHook) {
@@ -185,7 +174,6 @@ public OnConfigsExecuted() {
     g_bIsEnabled = GetConVarBool(Cvar_Enabled);
     GetConVarString(Cvar_AdminFlag, g_sCharAdminFlag, sizeof(g_sCharAdminFlag));
 
-    g_thirdpersonCvar = GetConVarInt(Cvar_ThirdPerson);
     g_hitremovePropCvar = GetConVarInt(Cvar_HitRemoveProp);
     g_adminonlyCvar = GetConVarInt(Cvar_AdminOnly);
     g_announcementCvar = GetConVarInt(Cvar_Announcement);
@@ -395,11 +383,7 @@ PropPlayer(client) {
 
     //Print Model name info to client
     PrintCenterText(client, "You are a %s!", sName);
-    if(g_thirdpersonCvar == 1) {
-        PrintToChat(client,"\x01You are disguised as a \x04%s\x01  - Type !third/!thirdperson to toggle thirdperson view!", sName);
-    } else {
-        PrintToChat(client,"\x01You are disguised as a \x04%s\x01 Go hide!", sName);
-    }
+    PrintToChat(client,"\x01You are disguised as a \x04%s\x01 Go hide!", sName);
     
     return iModelIndex;
 }
@@ -469,25 +453,6 @@ PerformPropPlayer(client, target, bool:bShowActivity = true) {
             ShowActivity(client, "Removed prop on %N", target);
         }
     }
-}
-
-public Action:Command_Thirdperson(client, args) {
-    if(!g_bIsEnabled || client < 1 || !IsClientInGame(client) || !IsPlayerAlive(client))
-        return Plugin_Handled;
-    
-    if(g_thirdpersonCvar != 1) {
-        PrintToConsole(client, "[SM] Sorry, this command has been disabled.");
-        return Plugin_Handled;
-    }
-
-    if(g_bIsProp[client]) {
-        // Toggle thirdperson mode on props.
-        SetThirdPerson(client, !g_bIsInThirdperson[client]);
-    } else {
-        ReplyToCommand(client, "[SM] You must be a prop to use thirdperson.");
-    }
-    
-    return Plugin_Handled;
 }
 
 // Enables and disables third-person mode.
@@ -939,21 +904,6 @@ CheckGame() {
     }
 }
 
-// Credit for auto-create SM commands code goes to Antithasys!
-stock CreateThirdpersonCommands() {
-    new String:sBuffer[128], String:sTriggerCommands[18][128];
-    GetConVarString(Cvar_ThirdTriggers, sBuffer, sizeof(sBuffer));
-    ExplodeString(sBuffer, ",", sTriggerCommands, sizeof(sTriggerCommands), sizeof(sTriggerCommands[]));
-    for (new x = 0; x < sizeof(sTriggerCommands); x++) {
-        if(IsStringBlank(sTriggerCommands[x])) {
-            continue;
-        }
-        new String:sCommand[128];
-        Format(sCommand, sizeof(sCommand), "sm_%s", sTriggerCommands[x]);
-        RegConsoleCmd(sCommand, Command_Thirdperson, "Command(s) used to enable thirdperson view");
-    }
-}
-
 stock bool:IsStringBlank(const String:input[]) {
     new len = strlen(input);
     for (new i=0; i<len; i++) {
@@ -1011,8 +961,6 @@ public Cvars_Changed(Handle:convar, const String:oldValue[], const String:newVal
                 }
             }
         }
-    } else if(convar == Cvar_ThirdPerson) {
-        g_thirdpersonCvar = StringToInt(newValue);
     } else if(convar == Cvar_HitRemoveProp) {
         g_hitremovePropCvar = StringToInt(newValue);
     } else if(convar == Cvar_AdminOnly) {
