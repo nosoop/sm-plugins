@@ -19,7 +19,7 @@
 #include <adminmenu>
 
 // Plugin version.
-#define PLUGIN_VERSION "1.9.4"
+#define PLUGIN_VERSION          "1.9.5"
 
 // Default prop command name.
 #define PROP_COMMAND            "sm_prop"
@@ -361,24 +361,14 @@ PropPlayer(client) {
     // Hide viewmodels for cleanliness.  We don't have any weapons, so it's fine.
     SetEntProp(client, Prop_Send, "m_bDrawViewmodel", 0);
     
-    // Kill wearables so Unusual effects do not show.
-    // No worries, they'll be remade on spawn.
-    new ent = -1;
-    while ((ent = FindEntityByClassname(ent, "tf_wearable")) != -1) {
-        if (IsValidEntity(ent)) {		
-            if (GetEntDataEnt2(ent, FindSendPropOffs("CTFWearable", "m_hOwnerEntity")) == client) {
-                AcceptEntityInput(ent, "Kill");
-            }
-        }
-    }
+    // Kill wearables so Unusual effects do not show.  No worries, they'll be remade on spawn.
+    KillClientOwnedEntity(client, "tf_wearable", "CTFWearable");
     
     // Remove canteens, too.  (Merged from PBR v1.5, Sillium.)
-    ent = -1;
-    while((ent = FindEntityByClassname(ent, "tf_powerup_bottle")) != -1) {      
-        if (GetEntDataEnt2(ent, FindSendPropOffs("CTFPowerupBottle", "m_hOwnerEntity")) == client) {
-            AcceptEntityInput(ent, "Kill");
-        }
-    }
+    KillClientOwnedEntity(client, "tf_powerup_bottle", "CTFPowerupBottle");
+    
+    // And remove Demo shields.  Buggy sometimes, though.
+    KillClientOwnedEntity(client, "tf_wearable_item_demoshield", "CTFWearableItemDemoShield");
     
     // Force prop speed.
     if (g_iPropSpeed != PROP_NO_CUSTOM_SPEED) {
@@ -390,6 +380,15 @@ PropPlayer(client) {
     PrintToChat(client,"\x01You are disguised as a \x04%s\x01 Go hide!", sName);
     
     return iModelIndex;
+}
+
+KillClientOwnedEntity(client, const String:sEntityName[], const String:sServerEntityName[]) {
+    new ent = -1;
+    while((ent = FindEntityByClassname(ent, sEntityName)) != -1) {      
+        if (GetEntDataEnt2(ent, FindSendPropOffs(sServerEntityName, "m_hOwnerEntity")) == client) {
+            AcceptEntityInput(ent, "Kill");
+        }
+    }
 }
 
 // Turns a client into a not-prop.
