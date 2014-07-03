@@ -19,7 +19,7 @@
 #include <adminmenu>
 
 // Plugin version.
-#define PLUGIN_VERSION "1.8.3"
+#define PLUGIN_VERSION "1.9.0"
 
 // Default prop command name.
 #define PROP_COMMAND            "sm_prop"
@@ -38,6 +38,12 @@
 // Key in the proplist whose value contains a space-delimited list of files to import.
 #define INCLUDE_PROPLIST_KEY    "#include"
 
+// Constants for sections of the configuration.
+#define PROPCONFIG_ROOT         0
+#define PROPCONFIG_PROPLIST     1
+#define PROPCONFIG_INCLUDELIST  2
+#define PROPCONFIG_SPAWNPOS     3
+
 // The maximum length of a prop name.  32 characters should be enough for all cases.
 #define PROPNAME_LENGTH         32
 
@@ -52,6 +58,7 @@ new Handle:Cvar_Announcement = INVALID_HANDLE;
 new Handle:Cvar_Respawnplayer = INVALID_HANDLE;
 
 // Arrays for prop models, names, and an list of additional files to load.
+new g_iPropListSection = PROPCONFIG_ROOT;
 new Handle:g_hModelNames = INVALID_HANDLE;
 new Handle:g_hModelPaths = INVALID_HANDLE;
 new Handle:g_hIncludePropLists = INVALID_HANDLE;
@@ -769,25 +776,39 @@ ReadPropConfigurationFile(String:fileName[]) {
 }
 
 public SMCResult:Config_NewSection(Handle:parser, const String:section[], bool:quotes) {
+    // Read the current config section.
+    if (StrEqual(section, "proplist")) {
+        g_iPropListSection = PROPCONFIG_PROPLIST;
+    } else if (StrEqual(section, "includes")) {
+        g_iPropListSection = PROPCONFIG_INCLUDELIST;
+    } else if (StrEqual(section, "spawns")) {
+        g_iPropListSection = PROPCONFIG_SPAWNPOS;
+    } else {
+        g_iPropListSection = PROPCONFIG_ROOT;
+    }
     return SMCParse_Continue;
 }
 
 public SMCResult:Config_KeyValue(Handle:parser, const String:key[], const String:value[], bool:key_quotes, bool:value_quotes) {
-    // If the key is an #include, add to the list.
-    if (StrEqual(key, INCLUDE_PROPLIST_KEY)) {
-        // Split the value by using spaces.
-        new String:sImportLists[16][PLATFORM_MAX_PATH];
-        ExplodeString(value, " ", sImportLists, sizeof(sImportLists), sizeof(sImportLists[]));
-        
-        for (new i = 0; i < sizeof(sImportLists); i++) {
-            // Prevent duplicates to prevent repeat loads and infinite loops.
-            if (strlen(sImportLists[i]) != 0 && FindStringInArray(g_hIncludePropLists, sImportLists[i]) == -1) {
-                PushArrayString(g_hIncludePropLists, sImportLists[i]);
+    // Check which section we are in and read accordingly.
+    switch(g_iPropListSection) {
+        case PROPCONFIG_PROPLIST: {
+            // Currently in the prop list section.  Add to appropriate prop arrays.
+            PushArrayString(g_hModelNames, key);
+            PushArrayString(g_hModelPaths, value);
+        }
+        case PROPCONFIG_INCLUDELIST: {
+            // Read any values that aren't already in the external prop list array.
+            if (FindStringInArray(g_hIncludePropLists, value) == -1) {
+                PushArrayString(g_hIncludePropLists, value);
             }
         }
-    } else {
-        PushArrayString(g_hModelNames, key);
-        PushArrayString(g_hModelPaths, value);
+        case PROPCONFIG_SPAWNPOS: {
+            // To be implemented:
+            // Custom spawn positions for spawning dead players.
+        }
+        default: {
+        }
     }
     return SMCParse_Continue;
 }
