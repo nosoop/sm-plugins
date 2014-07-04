@@ -4,13 +4,11 @@
  * File: prop_bonus_round.sp
  * Description: Turns the losing team into random props during bonus round!
  *
- * Credits to: strontiumdog for the idea based off his DODS version.
- * Credits to: Antithasys for SMC Parser/SM auto-cmds code and much help!
- *
  * 1.0.0 - Forked from https://forums.alliedmods.net/showthread.php?p=1096024
- * Forked version was 1.3 in the original post.
+ * Forked version was 1.3 in the original post.  See credits for their work there.
+ * They deserve it!
  *
- * See the commits to https://github.com/nosoop/sm-plugins for updated notes.
+ * See the commits to https://github.com/nosoop/sm-plugins for improvements and updated notes.
  */
 
 #pragma semicolon 1
@@ -21,7 +19,7 @@
 #include <adminmenu>
 
 // Plugin version.
-#define PLUGIN_VERSION          "1.10.1"
+#define PLUGIN_VERSION          "1.10.2"
 
 // Default prop command name.
 #define PROP_COMMAND            "sm_prop"
@@ -127,22 +125,22 @@ public OnPluginStart() {
 HookPropBonusRoundPluginEvents(bool:bHook) {
     if (bHook) {
         // Hook round events to set and unset props.
-        HookEvent("teamplay_round_start", Hook_RoundStart, EventHookMode_Post);
-        HookEvent("teamplay_round_win", Hook_RoundWin, EventHookMode_Post);
+        HookEvent("teamplay_round_start", Hook_PostRoundStart);
+        HookEvent("teamplay_round_win", Hook_PostRoundWin);
         
         // Hook player events to unset prop on death and remove prop on player when hit if desired.
-        HookEvent("player_death", Hook_Playerdeath, EventHookMode_Post);
-        HookEvent("player_hurt", Hook_PlayerHurt, EventHookMode_Post);
+        HookEvent("player_death", Hook_PostPlayerDeath);
+        HookEvent("player_hurt", Hook_PostPlayerHurt);
         
         // Hook resupply to restrip props of cosmetics and items.
-        HookEvent("post_inventory_application", Hook_PlayerInventoryUpdate);
+        HookEvent("post_inventory_application", Hook_PostPlayerInventoryUpdate);
     } else {
         // Unhook events.
-        UnhookEvent("teamplay_round_start", Hook_RoundStart, EventHookMode_Post);
-        UnhookEvent("teamplay_round_win", Hook_RoundWin, EventHookMode_Post);
-        UnhookEvent("player_death", Hook_Playerdeath, EventHookMode_Post);
-        UnhookEvent("player_hurt", Hook_PlayerHurt, EventHookMode_Post);
-        UnhookEvent("post_inventory_application", Hook_PlayerInventoryUpdate);
+        UnhookEvent("teamplay_round_start", Hook_PostRoundStart);
+        UnhookEvent("teamplay_round_win", Hook_PostRoundWin);
+        UnhookEvent("player_death", Hook_PostPlayerDeath);
+        UnhookEvent("player_hurt", Hook_PostPlayerHurt);
+        UnhookEvent("post_inventory_application", Hook_PostPlayerInventoryUpdate);
     }
 }
 
@@ -184,7 +182,7 @@ public OnMapStart() {
     }
 }
 
-public Hook_PlayerHurt(Handle:event, const String:name[], bool:dontBroadcast) {
+public Hook_PostPlayerHurt(Handle:event, const String:name[], bool:dontBroadcast) {
     if(!g_bPluginEnabled || !g_bBonusRound || !g_bDmgUnprops)
         return;
     
@@ -200,7 +198,7 @@ public Hook_PlayerHurt(Handle:event, const String:name[], bool:dontBroadcast) {
     }
 }
 
-public Hook_Playerdeath(Handle:event, const String:name[], bool:dontBroadcast) {
+public Hook_PostPlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) {
     if(!g_bPluginEnabled)
         return;
 
@@ -219,7 +217,7 @@ public Hook_Playerdeath(Handle:event, const String:name[], bool:dontBroadcast) {
     }
 }
 
-public Hook_RoundStart(Handle:event, const String:name[], bool:dontBroadcast) {
+public Hook_PostRoundStart(Handle:event, const String:name[], bool:dontBroadcast) {
     if(!g_bPluginEnabled)
         return;
 
@@ -237,7 +235,7 @@ public Hook_RoundStart(Handle:event, const String:name[], bool:dontBroadcast) {
     g_bBonusRound = false;
 }
 
-public Hook_RoundWin(Handle:event, const String:name[], bool:dontBroadcast) {
+public Hook_PostRoundWin(Handle:event, const String:name[], bool:dontBroadcast) {
     if(!g_bPluginEnabled)
         return;
 
@@ -255,7 +253,7 @@ public Hook_RoundWin(Handle:event, const String:name[], bool:dontBroadcast) {
     }
 }
 
-public Hook_PlayerInventoryUpdate(Handle:event, const String:name[], bool:dontBroadcast) {
+public Hook_PostPlayerInventoryUpdate(Handle:event, const String:name[], bool:dontBroadcast) {
     if(!g_bPluginEnabled)
         return;
 
