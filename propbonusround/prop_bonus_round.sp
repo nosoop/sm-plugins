@@ -19,7 +19,7 @@
 #include <adminmenu>
 
 // Plugin version.
-#define PLUGIN_VERSION          "1.10.3"
+#define PLUGIN_VERSION          "1.10.4"
 
 // Default prop command name.
 #define PROP_COMMAND            "sm_prop"
@@ -132,7 +132,8 @@ HookPropBonusRoundPluginEvents(bool:bHook) {
         HookEvent("player_death", Hook_PostPlayerDeath);
         HookEvent("player_hurt", Hook_PostPlayerHurt);
         
-        // Hook resupply to restrip props of cosmetics and items.
+        // Hook resupply and spawn to restrip props of cosmetics and items.
+        HookEvent("player_spawn", Hook_PostPlayerSpawn);
         HookEvent("post_inventory_application", Hook_PostPlayerInventoryUpdate);
     } else {
         // Unhook events.
@@ -140,6 +141,7 @@ HookPropBonusRoundPluginEvents(bool:bHook) {
         UnhookEvent("teamplay_round_win", Hook_PostRoundWin);
         UnhookEvent("player_death", Hook_PostPlayerDeath);
         UnhookEvent("player_hurt", Hook_PostPlayerHurt);
+        UnhookEvent("player_spawn", Hook_PostPlayerSpawn);
         UnhookEvent("post_inventory_application", Hook_PostPlayerInventoryUpdate);
     }
 }
@@ -193,9 +195,7 @@ public Hook_PostPlayerHurt(Handle:event, const String:name[], bool:dontBroadcast
         return;
 
     // Unprop player if attacked by another player.
-    if(g_bIsProp[client]) {
-        UnpropPlayer(client);
-    }
+    UnpropPlayer(client);
 }
 
 public Hook_PostPlayerDeath(Handle:event, const String:name[], bool:dontBroadcast) {
@@ -212,9 +212,7 @@ public Hook_PostPlayerDeath(Handle:event, const String:name[], bool:dontBroadcas
     if(client < 1 || !IsClientInGame(client))
         return;
 
-    if(g_bIsProp[client]) {
-        UnpropPlayer(client);
-    }
+    UnpropPlayer(client);
 }
 
 public Hook_PostRoundStart(Handle:event, const String:name[], bool:dontBroadcast) {
@@ -227,9 +225,7 @@ public Hook_PostRoundStart(Handle:event, const String:name[], bool:dontBroadcast
             continue;
         }
         
-        if(g_bIsProp[x]) {
-            UnpropPlayer(x);
-        }
+        UnpropPlayer(x);
     }
     
     g_bBonusRound = false;
@@ -251,6 +247,14 @@ public Hook_PostRoundWin(Handle:event, const String:name[], bool:dontBroadcast) 
         
         CreateTimer(0.1, Timer_EquipProps, _, TIMER_FLAG_NO_MAPCHANGE);
     }
+}
+
+public Hook_PostPlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast) {
+    new client = GetClientOfUserId(GetEventInt(event, "userid"));
+    
+    // If they switched classes or something, unprop them for now.
+    // TODO Fix?
+    UnpropPlayer(client, true);
 }
 
 public Hook_PostPlayerInventoryUpdate(Handle:event, const String:name[], bool:dontBroadcast) {
@@ -348,17 +352,14 @@ PropPlayer(client) {
     
     g_bIsProp[client] = true;
 
-    // Set to prop model.
+    // Set to prop model and enable prop rotation.
     SetVariantString(sPath);
     AcceptEntityInput(client, "SetCustomModel");
-    
-    // Enable rotation on the custom model.
     SetVariantInt(1);
     AcceptEntityInput(client, "SetCustomModelRotates");
     
-    // Set client to third-person.
+    // Set client to third-person and strip weapons and force speed override if desired.
     SetThirdPerson(client, true);
-    
     HidePlayerItemsAndDoPropStuff(client);
     
     //Print Model name info to client
@@ -368,8 +369,11 @@ PropPlayer(client) {
     return iModelIndex;
 }
 
-// Turns a client into a not-prop.  The only reason to respawn them is to return weapons to them on unprop (in the case of toggling).
+// Turns a client into a not-prop if they are.  The only reason to respawn them is to return weapons to them on unprop (in the case of toggling).
 UnpropPlayer(client, bool:respawn = false) {
+    if (!g_bIsProp[client])
+        return;
+
     // Clear custom model.
     if (IsValidEntity(client)) {
         SetVariantString("");
@@ -900,9 +904,7 @@ public Cvars_Changed(Handle:convar, const String:oldValue[], const String:newVal
             // Unprop and respawn the player when the plugin is disabled dynamically.
             for (new x = 1; x <= MaxClients; x++) {
                 if(IsClientInGame(x) && IsPlayerAlive(x)) {
-                    if(g_bIsProp[x]) {
-                        UnpropPlayer(x, true);
-                    }
+                    UnpropPlayer(x, true);
                 }
             }
         }
