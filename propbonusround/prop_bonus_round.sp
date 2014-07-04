@@ -19,7 +19,7 @@
 #include <adminmenu>
 
 // Plugin version.
-#define PLUGIN_VERSION          "1.10.2"
+#define PLUGIN_VERSION          "1.10.3"
 
 // Default prop command name.
 #define PROP_COMMAND            "sm_prop"
@@ -107,7 +107,7 @@ public OnPluginStart() {
     HookConVarChange(g_hCPropSpeed, Cvars_Changed);
 
     // Command to prop a player.
-    RegAdminCmd(PROP_COMMAND, Command_Propplayer, ADMFLAG_BAN, "sm_prop <#userid|name> - toggles prop on a player");
+    RegAdminCmd(PROP_COMMAND, Command_Propplayer, ADMFLAG_SLAY, "sm_prop <#userid|name> - toggles prop on a player");
     RegAdminCmd("sm_propbonus_reloadlist", Command_ReloadPropList, ADMFLAG_ROOT, "sm_propbonus_reloadlist - reloads list of props");
     
     // Hook round events to set and unset props.
