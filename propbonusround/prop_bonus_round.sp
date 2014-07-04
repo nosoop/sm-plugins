@@ -5,8 +5,7 @@
  * Description: Turns the losing team into random props during bonus round!
  *
  * 1.0.0 - Forked from https://forums.alliedmods.net/showthread.php?p=1096024
- * Forked version was 1.3 in the original post.  See credits for their work there.
- * They deserve it!
+ * Forked version was 1.3 in the original post.  See credits for their work there.  They deserve it!
  *
  * See the commits to https://github.com/nosoop/sm-plugins for improvements and updated notes.
  */
@@ -18,60 +17,46 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-// Plugin version.
-#define PLUGIN_VERSION          "1.10.5"
+#define PLUGIN_VERSION          "1.10.6"    // Plugin version.
 
-// Default prop command name.
-#define PROP_COMMAND            "sm_prop"
+#define PROP_COMMAND            "sm_prop"   // Default prop command name.
+#define PROP_NO_CUSTOM_SPEED    0           // Special value of sm_propbonus_forcespeed that disables the speed override.
+                                            // (Keep unchanged as 0 isn't a valid speed anyways.)
 
-// Special value of sm_propbonus_forcespeed that disables the speed override.
-// Do not change, as it so happens that a speed of 0 does not work anywhere else.
-#define PROP_NO_CUSTOM_SPEED    0
+#define PROP_RANDOM             -1          // Value for an unspecified prop to force a player into.
 
-// Value for an unspecified prop to force a player into.
-#define PROP_RANDOM             -1
+#define PROPLIST_BASEFILE       "base"      // Base configuration file.
+#define PROPLIST_ROOT           0           // Constants for sections of the configuration. (No reads.)
+#define PROPLIST_PROPS          1           // KV: "prop name" "models/path/to/prop/file.mdl"
+#define PROPLIST_INCLUDELIST    2           // KV: "any value" "file name to load another propconfig"
+#define PROPLIST_SPAWNPOS       3           // KV: "any value" "X Y Z P Y R" (spawn positions and angles?)
 
-// Base configuration file.
-#define PROPCONFIG_BASE         "base"
+#define PROPNAME_LENGTH         32          // The maximum length of a prop name.
 
-// Constants for sections of the configuration.
-#define PROPCONFIG_ROOT         0
-#define PROPCONFIG_PROPLIST     1
-#define PROPCONFIG_INCLUDELIST  2
-#define PROPCONFIG_SPAWNPOS     3
-
-// The maximum length of a prop name.  32 characters should be enough for all cases.
-#define PROPNAME_LENGTH         32
-
-new Handle:hAdminMenu = INVALID_HANDLE;
-new Handle:Cvar_AdminFlag = INVALID_HANDLE;
+new Handle:hAdminMenu = INVALID_HANDLE, Handle:Cvar_AdminFlag = INVALID_HANDLE;
 
 // Arrays for prop models, names, and an list of additional files to load.
-new g_iPropListSection = PROPCONFIG_ROOT;
-new Handle:g_hModelNames = INVALID_HANDLE;
-new Handle:g_hModelPaths = INVALID_HANDLE;
+new g_iPropListSection = PROPLIST_ROOT;
+new Handle:g_hModelNames = INVALID_HANDLE, Handle:g_hModelPaths = INVALID_HANDLE;
 new Handle:g_hIncludePropLists = INVALID_HANDLE;
 
 // ConVars and junk.  For references, see OnPluginStart().
 new Handle:g_hCPluginEnabled = INVALID_HANDLE,      bool:g_bPluginEnabled;      // sm_propbonus_enabled
 new Handle:g_hCAdminOnly = INVALID_HANDLE,          bool:g_bAdminOnly;          // sm_propbonus_adminonly
-new Handle:g_hCHumiliationRespawn = INVALID_HANDLE, bool:g_bHumiliationRespawn; // sm_propbonus_forcespawn
-new Handle:g_hCDmgUnprops = INVALID_HANDLE,         bool:g_bDmgUnprops;         // sm_propbonus_damageunprops
 new Handle:g_hCAnnouncePropRound = INVALID_HANDLE,  bool:g_bAnnouncePropRound;  // sm_propbonus_announcement
+new Handle:g_hCDmgUnprops = INVALID_HANDLE,         bool:g_bDmgUnprops;         // sm_propbonus_damageunprops
+new Handle:g_hCHumiliationRespawn = INVALID_HANDLE, bool:g_bHumiliationRespawn; // sm_propbonus_forcespawn
 new Handle:g_hCPropSpeed = INVALID_HANDLE,          g_iPropSpeed;               // sm_propbonus_forcespeed
 
 // Boolean flags for prop functions.
-new bool:g_bIsProp[MAXPLAYERS+1] = { false, ... };
-new bool:g_bIsInThirdperson[MAXPLAYERS+1] = { false, ... };
-new bool:g_bIsPropLocked[MAXPLAYERS+1] = { false, ... };
-new bool:g_bRecentlySetPropLock[MAXPLAYERS+1] = { false, ... };
-new bool:g_bRecentlySetThirdPerson[MAXPLAYERS+1] = { false, ... };
+new bool:g_bIsProp[MAXPLAYERS+1],
+    bool:g_bIsPropLocked[MAXPLAYERS+1], bool:g_bRecentlySetPropLock[MAXPLAYERS+1],
+    bool:g_bIsInThirdperson[MAXPLAYERS+1], bool:g_bRecentlySetThirdPerson[MAXPLAYERS+1];
 
-new bool:g_bIsPlayerAdmin[MAXPLAYERS + 1] = { false, ... };
+new bool:g_bIsPlayerAdmin[MAXPLAYERS + 1];
 
 // Humiliation mode handling.
-new bool:g_bBonusRound = false;
-new g_iWinningTeam;
+new bool:g_bBonusRound, g_iWinningTeam;
 
 new String:g_sCharAdminFlag[32];
 
@@ -97,16 +82,16 @@ public OnPluginStart() {
     
     Cvar_AdminFlag = CreateConVar("sm_propbonus_flag", "b", "Admin flag to use if adminonly is enabled (only one).  Must be a in char format.");
     
-    g_hCAnnouncePropRound = CreateConVar("sm_propbonus_announcement", "1", "Public announcement msg at start of bonus round?");
+    g_hCAnnouncePropRound = CreateConVar("sm_propbonus_announcement", "1", "Whether or not an announcement is made about the prop hunting end-round.");
     HookConVarChange(g_hCAnnouncePropRound, Cvars_Changed);
 
     g_hCDmgUnprops = CreateConVar("sm_propbonus_damageunprops", "0", "Remove player prop once they take damage?");
     HookConVarChange(g_hCDmgUnprops, Cvars_Changed);
 
-    g_hCHumiliationRespawn = CreateConVar("sm_propbonus_forcespawn", "0", "Respawn dead players at start of bonusround?");
+    g_hCHumiliationRespawn = CreateConVar("sm_propbonus_forcespawn", "0", "Whether or not dead players will be respawned and turned into a prop.");
     HookConVarChange(g_hCHumiliationRespawn, Cvars_Changed);
     
-    g_hCPropSpeed = CreateConVar("sm_propbonus_forcespeed", "0", "Force all props to a specific speed, in an integer representing HU/s.  Setting this to 0 allows props to move at default speed.");
+    g_hCPropSpeed = CreateConVar("sm_propbonus_forcespeed", "0", "Force all props to a specific speed, in an integer representing HU/s.  Setting this to 0 allows props to move at their default class speed.");
     HookConVarChange(g_hCPropSpeed, Cvars_Changed);
 
     // Command to prop a player.
@@ -266,7 +251,7 @@ public Hook_PostPlayerInventoryUpdate(Handle:event, const String:name[], bool:do
 
     new client = GetClientOfUserId(GetEventInt(event, "userid"));
     if (g_bIsProp[client]) {
-        // Since we just got items back, undo that here.
+        // Restrip players of items.
         HidePlayerItemsAndDoPropStuff(client);
     }
 }
@@ -348,7 +333,7 @@ public Action:Command_Propplayer(client, args) {
 PropPlayer(client, propIndex = PROP_RANDOM) {
     new iModelIndex;
     if (propIndex == PROP_RANDOM) {
-        // GetRandomInt is inclusive.
+        // GetRandomInt is inclusive, so last model index = size of array minus one.
         iModelIndex = GetRandomInt(0, GetArraySize(g_hModelNames) - 1);
     } else {
         iModelIndex = propIndex;
@@ -426,7 +411,7 @@ UnpropPlayer(client, bool:respawn = false) {
     }
 }
 
-// Very descriptive, isn't it.
+// Very descriptive, isn't it.  Things to do to a prop that get their items and such back.
 HidePlayerItemsAndDoPropStuff(client) {
     // Strip weapons from propped player.
     StripWeapons(client);
@@ -460,16 +445,15 @@ KillClientOwnedEntity(client, const String:sEntityName[], const String:sServerEn
     }
 }
 
+
 SetDemomanEyeGlow(client, bool:enable) {
     new TFClassType:class = TF2_GetPlayerClass(client);
     if (class == TFClass_DemoMan) {
         new decapitations = GetEntProp(client, Prop_Send, "m_iDecapitations");
         if (decapitations >= 1) {
             if(!enable) {
-                //Removes Glowing Eye
                 TF2_RemoveCondition(client, TFCond_DemoBuff);
             } else {
-                //Add Glowing Eye
                 TF2_AddCondition(client, TFCond_DemoBuff, -1.0);
             }
         }
@@ -528,25 +512,23 @@ SetThirdPerson(client, bool:bEnabled, bool:bUseDirtyHack = false) {
     g_bIsInThirdperson[client] = bEnabled;
 }
 
-// Global forward to test if a client wants to toggle proplock or third-person mode.
+// Global forward to test if a propped client wants to toggle proplock or third-person mode.
 public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:angles[3], &weapon) {
-    // Only run the checks when the client is a prop.
     if (g_bIsProp[client]) {
         // +attack toggles prop locking.
         if ((buttons & IN_ATTACK) == IN_ATTACK) {
             if (!g_bRecentlySetPropLock[client]) {
-                // Toggle proplock state.
                 SetPropLockState(client, !g_bIsPropLocked[client]);
                 
-                // Lock in the proplock settings for one second, as this code path is run while +attack is held.
+                // Lock in the proplock settings for one second, as this code path is reached while +attack is held.
                 g_bRecentlySetPropLock[client] = true;
                 CreateTimer(1.0, UnsetPropLockToggleDelay, client);
             }
         }
         
+        // +attack2 toggles third-person state.
         if ((buttons & IN_ATTACK2) == IN_ATTACK2) {
             if (!g_bRecentlySetThirdPerson[client]) {
-                // Toggle proplock state.
                 SetThirdPerson(client, !g_bIsInThirdperson[client], g_bBonusRound);
                 PrintHintText(client, "%s third person mode.", g_bIsInThirdperson[client] ? "Enabled" : "Disabled");
                 
@@ -633,7 +615,7 @@ stock ProcessConfigFile() {
     ClearArray(g_hModelPaths);
 
     // Push a read from the base proplist.
-    PushArrayString(g_hIncludePropLists, PROPCONFIG_BASE);
+    PushArrayString(g_hIncludePropLists, PROPLIST_BASEFILE);
 
     // Push a read from the map-specific proplist.
     new String:mapName[64];
@@ -657,15 +639,15 @@ stock ProcessConfigFile() {
     ClearArray(g_hIncludePropLists);
 }
 
-ReadPropConfigurationFile(String:fileName[]) {
-    new String:sConfigPath[PLATFORM_MAX_PATH];
-    new String:mapFilePath[128];
-    Format(mapFilePath, sizeof(mapFilePath), "data/propbonusround/%s.txt", fileName);
-    BuildPath(Path_SM, sConfigPath, sizeof(sConfigPath), mapFilePath);
+ReadPropConfigurationFile(const String:fileName[]) {
+    new String:sPropFileFullPath[PLATFORM_MAX_PATH];
+    new String:sPropFilePath[128];
+    Format(sPropFilePath, sizeof(sPropFilePath), "data/propbonusround/%s.txt", fileName);
+    BuildPath(Path_SM, sPropFileFullPath, sizeof(sPropFileFullPath), sPropFilePath);
 
-    if (!FileExists(sConfigPath) && StrEqual(fileName, PROPCONFIG_BASE)) {
+    if (!FileExists(sPropFileFullPath) && StrEqual(fileName, PROPLIST_BASEFILE)) {
         // Base configuration file file does not exist. Create a basic prop list file before precache.
-        LogMessage("Models file not found at %s. Auto-creating file...", mapFilePath);
+        LogMessage("Models file not found at %s. Auto-creating file...", sPropFilePath);
         
         new String:sConfigDir[PLATFORM_MAX_PATH];
         BuildPath(Path_SM, sConfigDir, sizeof(sConfigDir), "data/propbonusround/");
@@ -673,15 +655,15 @@ ReadPropConfigurationFile(String:fileName[]) {
             CreateDirectory(sConfigDir, 511);
         }
         
-        SetupDefaultProplistFile(sConfigPath);
+        SetupDefaultProplistFile(sPropFileFullPath);
         
-        if (!FileExists(sConfigPath)) {
+        if (!FileExists(sPropFileFullPath)) {
             // Second fail-safe check. Somehow, the file did not get created, so it is disable time.
-            SetFailState("Models file (%s) still not found.", mapFilePath);
+            SetFailState("Models file (%s) still not found.", sPropFilePath);
         }
     }
     
-    if (FileExists(sConfigPath)) {
+    if (FileExists(sPropFileFullPath)) {
         new Handle:hParser = SMC_CreateParser();
         new line, col;
         new String:error[128];
@@ -689,33 +671,33 @@ ReadPropConfigurationFile(String:fileName[]) {
         SMC_SetReaders(hParser, Config_NewSection, Config_KeyValue, Config_EndSection);
         SMC_SetParseEnd(hParser, Config_End);
 
-        new SMCError:mapResult = SMC_ParseFile(hParser, sConfigPath, line, col);
+        new SMCError:mapResult = SMC_ParseFile(hParser, sPropFileFullPath, line, col);
         CloseHandle(hParser);
         
         if (mapResult != SMCError_Okay) {
             SMC_GetErrorString(mapResult, error, sizeof(error));
-            LogError("%s on line %d, col %d of %s", error, line, col, sConfigPath);
-            LogError("Failed to parse proplist %s.", sConfigPath);
+            LogError("%s on line %d, col %d of %s", error, line, col, sPropFileFullPath);
+            LogError("Failed to parse proplist %s.", sPropFileFullPath);
             
-            if (StrEqual(fileName, PROPCONFIG_BASE)) {
-                SetFailState("Could not parse file %s", sConfigPath);
+            if (StrEqual(fileName, PROPLIST_BASEFILE)) {
+                SetFailState("Could not parse file %s", sPropFileFullPath);
             }
         }
     } else {
-        LogMessage("Could not find proplist %s.", sConfigPath);
+        LogMessage("Could not find proplist %s.", sPropFileFullPath);
     }
 }
 
 public SMCResult:Config_NewSection(Handle:parser, const String:section[], bool:quotes) {
     // Read the current config section.
     if (StrEqual(section, "proplist")) {
-        g_iPropListSection = PROPCONFIG_PROPLIST;
+        g_iPropListSection = PROPLIST_PROPS;
     } else if (StrEqual(section, "includes")) {
-        g_iPropListSection = PROPCONFIG_INCLUDELIST;
+        g_iPropListSection = PROPLIST_INCLUDELIST;
     } else if (StrEqual(section, "spawns")) {
-        g_iPropListSection = PROPCONFIG_SPAWNPOS;
+        g_iPropListSection = PROPLIST_SPAWNPOS;
     } else {
-        g_iPropListSection = PROPCONFIG_ROOT;
+        g_iPropListSection = PROPLIST_ROOT;
     }
     return SMCParse_Continue;
 }
@@ -723,18 +705,18 @@ public SMCResult:Config_NewSection(Handle:parser, const String:section[], bool:q
 public SMCResult:Config_KeyValue(Handle:parser, const String:key[], const String:value[], bool:key_quotes, bool:value_quotes) {
     // Check which section we are in and read accordingly.
     switch(g_iPropListSection) {
-        case PROPCONFIG_PROPLIST: {
+        case PROPLIST_PROPS: {
             // Currently in the prop list section.  Add to appropriate prop arrays.
             PushArrayString(g_hModelNames, key);
             PushArrayString(g_hModelPaths, value);
         }
-        case PROPCONFIG_INCLUDELIST: {
+        case PROPLIST_INCLUDELIST: {
             // Read any values that aren't already in the external prop list array.
             if (FindStringInArray(g_hIncludePropLists, value) == -1) {
                 PushArrayString(g_hIncludePropLists, value);
             }
         }
-        case PROPCONFIG_SPAWNPOS: {
+        case PROPLIST_SPAWNPOS: {
             // To be implemented:
             // Custom spawn positions for spawning dead players.
         }
@@ -774,7 +756,7 @@ public OnAdminMenuReady(Handle:topmenu) {
     }
 }
 
-public AdminMenu_Propplayer( Handle:topmenu, TopMenuAction:action, TopMenuObject:object_id, param, String:buffer[], maxlength ) {
+public AdminMenu_Propplayer(Handle:topmenu, TopMenuAction:action, TopMenuObject:object_id, param, String:buffer[], maxlength ) {
     if (action == TopMenuAction_DisplayOption) {
         Format(buffer, maxlength, "Prop player");
     } else if (action == TopMenuAction_SelectOption) {
@@ -824,7 +806,7 @@ public MenuHandler_Players(Handle:menu, MenuAction:action, param1, param2) {
     }
 }
 
-SetupDefaultProplistFile(String:sConfigPath[]) {
+SetupDefaultProplistFile(const String:sConfigPath[]) {
     new Handle:hKVBuildProplist = CreateKeyValues("propbonusround");
 
     KvJumpToKey(hKVBuildProplist, "proplist", true);
