@@ -17,7 +17,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "1.10.6"    // Plugin version.
+#define PLUGIN_VERSION          "1.10.7"    // Plugin version.  Am I doing semantic versioning right?
 
 #define PROP_COMMAND            "sm_prop"   // Default prop command name.
 #define PROP_NO_CUSTOM_SPEED    0           // Special value of sm_propbonus_forcespeed that disables the speed override.
@@ -35,7 +35,7 @@
 
 new Handle:hAdminMenu = INVALID_HANDLE, Handle:Cvar_AdminFlag = INVALID_HANDLE;
 
-// Arrays for prop models, names, and an list of additional files to load.
+// Arrays for prop models, names, and a list of additional files to load.
 new g_iPropListSection = PROPLIST_ROOT;
 new Handle:g_hModelNames = INVALID_HANDLE, Handle:g_hModelPaths = INVALID_HANDLE;
 new Handle:g_hIncludePropLists = INVALID_HANDLE;
@@ -355,7 +355,7 @@ PropPlayer(client, propIndex = PROP_RANDOM) {
     SetThirdPerson(client, true);
     HidePlayerItemsAndDoPropStuff(client);
     
-    //Print Model name info to client
+    // Print prop name and such to the client.
     PrintCenterText(client, "You are a %s!", sName);
     PrintToChat(client,"\x01You are disguised as a \x04%s\x01 Go hide!", sName);
     
@@ -444,7 +444,6 @@ KillClientOwnedEntity(client, const String:sEntityName[], const String:sServerEn
         }
     }
 }
-
 
 SetDemomanEyeGlow(client, bool:enable) {
     new TFClassType:class = TF2_GetPlayerClass(client);
