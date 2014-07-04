@@ -21,7 +21,7 @@
 #include <adminmenu>
 
 // Plugin version.
-#define PLUGIN_VERSION          "1.10.0"
+#define PLUGIN_VERSION          "1.10.1"
 
 // Default prop command name.
 #define PROP_COMMAND            "sm_prop"
@@ -133,12 +133,16 @@ HookPropBonusRoundPluginEvents(bool:bHook) {
         // Hook player events to unset prop on death and remove prop on player when hit if desired.
         HookEvent("player_death", Hook_Playerdeath, EventHookMode_Post);
         HookEvent("player_hurt", Hook_PlayerHurt, EventHookMode_Post);
+        
+        // Hook resupply to restrip props of cosmetics and items.
+        HookEvent("post_inventory_application", Hook_PlayerInventoryUpdate);
     } else {
         // Unhook events.
         UnhookEvent("teamplay_round_start", Hook_RoundStart, EventHookMode_Post);
         UnhookEvent("teamplay_round_win", Hook_RoundWin, EventHookMode_Post);
         UnhookEvent("player_death", Hook_Playerdeath, EventHookMode_Post);
         UnhookEvent("player_hurt", Hook_PlayerHurt, EventHookMode_Post);
+        UnhookEvent("post_inventory_application", Hook_PlayerInventoryUpdate);
     }
 }
 
@@ -251,6 +255,17 @@ public Hook_RoundWin(Handle:event, const String:name[], bool:dontBroadcast) {
     }
 }
 
+public Hook_PlayerInventoryUpdate(Handle:event, const String:name[], bool:dontBroadcast) {
+    if(!g_bPluginEnabled)
+        return;
+
+    new client = GetClientOfUserId(GetEventInt(event, "userid"));
+    if (g_bIsProp[client]) {
+        // Since we just got items back, undo that here.
+        HidePlayerItemsAndDoPropStuff(client);
+    }
+}
+
 public Action:Timer_EquipProps(Handle:timer) {
     for (new x = 1; x <= MaxClients; x++) {
         if(!IsClientInGame(x)) {
@@ -346,28 +361,8 @@ PropPlayer(client) {
     // Set client to third-person.
     SetThirdPerson(client, true);
     
-    // Strip weapons from propped player.
-    StripWeapons(client);
+    HidePlayerItemsAndDoPropStuff(client);
     
-    SetDemomanEyeGlow(client, false);
-    
-    // Hide viewmodels for cleanliness.  We don't have any weapons, so it's fine.
-    SetEntProp(client, Prop_Send, "m_bDrawViewmodel", 0);
-    
-    // Kill wearables so Unusual effects do not show.  No worries, they'll be remade on spawn.
-    KillClientOwnedEntity(client, "tf_wearable", "CTFWearable");
-    
-    // Remove canteens, too.  (Merged from PBR v1.5, Sillium.)
-    KillClientOwnedEntity(client, "tf_powerup_bottle", "CTFPowerupBottle");
-    
-    // And remove Demo shields.  Buggy sometimes, though.
-    KillClientOwnedEntity(client, "tf_wearable_demoshield", "CTFWearableDemoShield");
-    
-    // Force prop speed.
-    if (g_iPropSpeed != PROP_NO_CUSTOM_SPEED) {
-        SetEntPropFloat(client, Prop_Send, "m_flMaxspeed", float(g_iPropSpeed));
-    }
-
     //Print Model name info to client
     PrintCenterText(client, "You are a %s!", sName);
     PrintToChat(client,"\x01You are disguised as a \x04%s\x01 Go hide!", sName);
@@ -418,6 +413,31 @@ UnpropPlayer(client, bool:respawn = false) {
         // Return health and position.
         SetEntityHealth(client, iHealth);
         TeleportEntity(client, origin, angle, velocity);
+    }
+}
+
+// Very descriptive, isn't it.
+HidePlayerItemsAndDoPropStuff(client) {
+    // Strip weapons from propped player.
+    StripWeapons(client);
+    
+    SetDemomanEyeGlow(client, false);
+    
+    // Hide viewmodels for cleanliness.  We don't have any weapons, so it's fine.
+    SetEntProp(client, Prop_Send, "m_bDrawViewmodel", 0);
+    
+    // Kill wearables so Unusual effects do not show.  No worries, they'll be remade on spawn.
+    KillClientOwnedEntity(client, "tf_wearable", "CTFWearable");
+    
+    // Remove canteens, too.  (Merged from PBR v1.5, Sillium.)
+    KillClientOwnedEntity(client, "tf_powerup_bottle", "CTFPowerupBottle");
+    
+    // And remove Demo shields.  Buggy sometimes, though.
+    KillClientOwnedEntity(client, "tf_wearable_demoshield", "CTFWearableDemoShield");
+    
+    // Force prop speed.
+    if (g_iPropSpeed != PROP_NO_CUSTOM_SPEED) {
+        SetEntPropFloat(client, Prop_Send, "m_flMaxspeed", float(g_iPropSpeed));
     }
 }
 
