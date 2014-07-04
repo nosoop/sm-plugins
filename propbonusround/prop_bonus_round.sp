@@ -19,7 +19,7 @@
 #include <adminmenu>
 
 // Plugin version.
-#define PLUGIN_VERSION          "1.10.4"
+#define PLUGIN_VERSION          "1.10.5"
 
 // Default prop command name.
 #define PROP_COMMAND            "sm_prop"
@@ -27,6 +27,9 @@
 // Special value of sm_propbonus_forcespeed that disables the speed override.
 // Do not change, as it so happens that a speed of 0 does not work anywhere else.
 #define PROP_NO_CUSTOM_SPEED    0
+
+// Value for an unspecified prop to force a player into.
+#define PROP_RANDOM             -1
 
 // Base configuration file.
 #define PROPCONFIG_BASE         "base"
@@ -342,9 +345,14 @@ public Action:Command_Propplayer(client, args) {
 }
 
 // Turns a client into a prop.  Return value is the index value of the prop selected.
-PropPlayer(client) {
-    // GetRandomInt is inclusive.
-    new iModelIndex = GetRandomInt(0, GetArraySize(g_hModelNames) - 1);
+PropPlayer(client, propIndex = PROP_RANDOM) {
+    new iModelIndex;
+    if (propIndex == PROP_RANDOM) {
+        // GetRandomInt is inclusive.
+        iModelIndex = GetRandomInt(0, GetArraySize(g_hModelNames) - 1);
+    } else {
+        iModelIndex = propIndex;
+    }
     
     new String:sPath[PLATFORM_MAX_PATH], String:sName[PROPNAME_LENGTH];
     GetArrayString(g_hModelNames, iModelIndex, sName, sizeof(sName));
