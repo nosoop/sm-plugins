@@ -20,7 +20,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "2.0.0"    // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.0.0"     // Plugin version.  Am I doing semantic versioning right?
 
 new Handle:Cvar_AdminFlag = INVALID_HANDLE;
 

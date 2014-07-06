@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "2.0.0"    // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.0.0"     // Plugin version.  Am I doing semantic versioning right?
 
 #define PROP_COMMAND            "sm_prop"   // Default prop command name.
 #define PROP_NO_CUSTOM_SPEED    0           // Special value of sm_propbonus_forcespeed that disables the speed override.
@@ -304,7 +304,7 @@ public Native_PropPlayer(Handle:plugin, numParams) {
 
 // Turns a client into a not-prop if they are.  The only reason to respawn them is to return weapons to them on unprop (in the case of toggling).
 UnpropPlayer(client, bool:respawn = false) {
-    if (!g_bIsProp[client] || !IsClientInGame(client))
+    if (!g_bIsProp[client] || !IsClientInGame(client) || !IsPlayerAlive(client))
         return;
 
     // Clear custom model.
