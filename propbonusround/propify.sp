@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "2.0.0"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.0.1"     // Plugin version.  Am I doing semantic versioning right?
 
 #define PROP_COMMAND            "sm_prop"   // Default prop command name.
 #define PROP_NO_CUSTOM_SPEED    0           // Special value of sm_propbonus_forcespeed that disables the speed override.
@@ -219,6 +219,7 @@ public Action:Command_Propplayer(client, args) {
     decl target_list[MAXPLAYERS];
     decl target_count;
     decl bool:tn_is_ml;
+    new propIndex = PROP_RANDOM;
     
     if (args < 1) {
         ReplyToCommand(client, "[SM] Usage: sm_prop <#userid|name>");
@@ -226,6 +227,12 @@ public Action:Command_Propplayer(client, args) {
     }
     
     GetCmdArg(1, target, sizeof(target));
+    
+    if (args > 1) {
+        new String:propIndexStr[16];
+        GetCmdArg(2, propIndexStr, sizeof(propIndexStr));
+        propIndex = StringToInt(propIndexStr);
+    }
     
     if((target_count = ProcessTargetString(target, client, target_list, 
             MAXPLAYERS, 0, target_name, sizeof(target_name), tn_is_ml)) <= 0) {
@@ -235,7 +242,7 @@ public Action:Command_Propplayer(client, args) {
     
     for(new i = 0; i < target_count; i++) {
         if(IsClientInGame(target_list[i]) && IsPlayerAlive(target_list[i])) {
-            PerformPropPlayer(client, target_list[i], target_count == 1);
+            PerformPropPlayer(client, target_list[i], propIndex, target_count == 1);
         }
     }
     if (target_count > 1) {
@@ -273,7 +280,7 @@ PropPlayer(client, propIndex = PROP_RANDOM) {
 
     // If the client was already a prop, the model change is all that needs to be done.
     if (g_bIsProp[client]) {
-        return;
+        return iModelIndex;
     }
     
     g_bIsProp[client] = true;
@@ -399,22 +406,19 @@ KillClientOwnedEntity(client, const String:sEntityName[], const String:sServerEn
 }
 
 // Action to prop a player.  Do not show activity here if targetting multiple players.
-PerformPropPlayer(client, target, bool:bShowActivity = true) {
+PerformPropPlayer(client, target, propIndex = PROP_RANDOM, bool:bShowActivity = true) {
     if(!IsClientInGame(target) || !IsPlayerAlive(target))
         return;
     
-    if(!g_bIsProp[target]) {
-        PropPlayer(target);
-        LogAction(client, target, "\"%L\" set prop on \"%L\"", client, target);
-        if (bShowActivity) {
-            ShowActivity(client, "Set prop on %N", target);
-        }
+    if(!g_bIsProp[target] || propIndex != PROP_RANDOM) {
+        PropPlayer(target, propIndex);
     } else {
         UnpropPlayer(target, true);
-        LogAction(client, target, "\"%L\" removed prop on \"%L\"", client, target);
-        if (bShowActivity) {
-            ShowActivity(client, "Removed prop on %N", target);
-        }
+    }
+    
+    LogAction(client, target, "\"%L\" %s prop on \"%L\"", client, g_bIsProp[target] ? "set" : "removed", target);
+    if (bShowActivity) {
+        ShowActivity(client, "%s prop on %N", g_bIsProp[target] ? "set" : "removed", target);
     }
 }
 
