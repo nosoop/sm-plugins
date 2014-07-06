@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "2.1.0"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.1.2"     // Plugin version.  Am I doing semantic versioning right?
 
 #define PROP_COMMAND            "sm_prop"   // Default prop command name.
 #define PROP_NO_CUSTOM_SPEED    0           // Special value of sm_propbonus_forcespeed that disables the speed override.
@@ -223,7 +223,7 @@ public Action:Command_Propplayer(client, args) {
     new propIndex = PROP_RANDOM_TOGGLE;
     
     if (args < 1) {
-        ReplyToCommand(client, "[SM] Usage: sm_prop <#userid|name> [propindex] - toggles prop on a player.  [propindex] can be one of the following: -2 = toggle into and out of random prop, -1 = random prop (reroll if already a prop), 0 and up to select one of the loaded props.");
+        ReplyToCommand(client, "[SM] Usage: sm_prop <#userid|name> [propindex] - toggles prop on a player.  [propindex] can be one of the following: -2 = toggle into and out of random prop, -1 = random prop (reroll if already a prop), 0 and up to select one of the loaded props, other negative values to unprop.");
         return Plugin_Handled;
     }
     
@@ -409,13 +409,15 @@ PerformPropPlayer(client, target, propIndex = PROP_RANDOM_TOGGLE, bool:bShowActi
     if(!IsClientInGame(target) || !IsPlayerAlive(target))
         return;
     
+    // If not a prop or we are forcing a prop by using a value >= PROP_RANDOM...
     if(!g_bIsProp[target] || propIndex >= PROP_RANDOM) {
-        if (g_bIsProp[target] && propIndex == PROP_RANDOM_TOGGLE) {
+        if (propIndex < PROP_RANDOM_TOGGLE || (g_bIsProp[target] && propIndex == PROP_RANDOM_TOGGLE) ) {
+            // Unprop the player if they are a prop and set to untoggle or if it's a larger negative number.
             UnpropPlayer(target, true);
         } else {
+            // Otherwise, check the bounds and turn the player into a prop if it's a valid entry.
             new iModelCount = GetArraySize(g_hModelNames) - 1;
-            propIndex = PROP_RANDOM;
-            if (propIndex > iModelCount || propIndex <= PROP_RANDOM_TOGGLE) {
+            if (propIndex > iModelCount) {
                 ReplyToCommand(client, "[SM] Failed to prop %N: prop index must be between -1 (random prop) and %d.", target, iModelCount);
                 return;
             }
