@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "2.0.1"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.0.2"     // Plugin version.  Am I doing semantic versioning right?
 
 #define PROP_COMMAND            "sm_prop"   // Default prop command name.
 #define PROP_NO_CUSTOM_SPEED    0           // Special value of sm_propbonus_forcespeed that disables the speed override.
@@ -79,7 +79,7 @@ public OnPluginStart() {
     HookConVarChange(g_hCPropSpeed, Cvars_Changed);
     
     // Command to prop a player.
-    RegAdminCmd(PROP_COMMAND, Command_Propplayer, ADMFLAG_SLAY, "sm_prop <#userid|name> - toggles prop on a player");
+    RegAdminCmd(PROP_COMMAND, Command_Propplayer, ADMFLAG_SLAY, "sm_prop <#userid|name> [propindex] - toggles prop on a player");
     RegAdminCmd("sm_propify_reloadlist", Command_ReloadPropList, ADMFLAG_ROOT, "sm_propify_reloadlist - reloads list of props");
     
     // Hook round events to set and unset props.
@@ -259,7 +259,7 @@ public Native_IsClientProp(Handle:plugin, numParams) {
 // Turns a client into a prop.  Return value is the index value of the prop selected.
 PropPlayer(client, propIndex = PROP_RANDOM) {
     new iModelIndex;
-    if (propIndex == PROP_RANDOM) {
+    if (propIndex <= PROP_RANDOM) {
         // GetRandomInt is inclusive, so last model index = size of array minus one.
         iModelIndex = GetRandomInt(0, GetArraySize(g_hModelNames) - 1);
     } else {
@@ -305,7 +305,6 @@ public Native_PropPlayer(Handle:plugin, numParams) {
         return true;
     }
     
-    ThrowNativeError(SP_ERROR_PARAM, "Cannot prop a player that is not in-game nor alive.");
     return false;
 }
 
@@ -368,7 +367,6 @@ public Native_UnpropPlayer(Handle:plugin, numParams) {
         return true;
     }
     
-    ThrowNativeError(SP_ERROR_PARAM, "Cannot unprop a player that is not in-game nor alive.");
     return false;
 }
 
@@ -410,7 +408,12 @@ PerformPropPlayer(client, target, propIndex = PROP_RANDOM, bool:bShowActivity = 
     if(!IsClientInGame(target) || !IsPlayerAlive(target))
         return;
     
-    if(!g_bIsProp[target] || propIndex != PROP_RANDOM) {
+    if(!g_bIsProp[target] || propIndex >= 0) {
+        new iModelCount = GetArraySize(g_hModelNames) - 1;
+        if (propIndex > iModelCount) {
+            ReplyToCommand(client, "[SM] Failed to prop %N: prop index must be between 0 and %d.", target, iModelCount);
+            return;
+        }
         PropPlayer(target, propIndex);
     } else {
         UnpropPlayer(target, true);
