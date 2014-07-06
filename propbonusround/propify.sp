@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "2.1.2"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.1.3"     // Plugin version.  Am I doing semantic versioning right?
 
 #define PROP_COMMAND            "sm_prop"   // Default prop command name.
 #define PROP_NO_CUSTOM_SPEED    0           // Special value of sm_propbonus_forcespeed that disables the speed override.
@@ -223,7 +223,12 @@ public Action:Command_Propplayer(client, args) {
     new propIndex = PROP_RANDOM_TOGGLE;
     
     if (args < 1) {
-        ReplyToCommand(client, "[SM] Usage: sm_prop <#userid|name> [propindex] - toggles prop on a player.  [propindex] can be one of the following: -2 = toggle into and out of random prop, -1 = random prop (reroll if already a prop), 0 and up to select one of the loaded props, other negative values to unprop.");
+        ReplyToCommand(client, "[SM] Usage: sm_prop <#userid|name> [propindex] - toggles prop on a player.\n" ...
+                "  propindex can be one of the following:\n" ...
+                "  -2 = toggle into and out of a random prop (default),\n" ...
+                "  -1 = random prop, rerolling if already a prop,\n" ...
+                "  [0, ...) = one of the props on the list,\n" ...
+                "  (..., -3] = force unprop.");
         return Plugin_Handled;
     }
     
