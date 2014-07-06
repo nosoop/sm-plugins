@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "2.1.3"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.1.4"     // Plugin version.  Am I doing semantic versioning right?
 
 #define PROP_COMMAND            "sm_prop"   // Default prop command name.
 #define PROP_NO_CUSTOM_SPEED    0           // Special value of sm_propbonus_forcespeed that disables the speed override.
@@ -265,6 +265,8 @@ public Native_IsClientProp(Handle:plugin, numParams) {
 // Turns a client into a prop.  Return value is the index value of the prop selected.
 PropPlayer(client, propIndex = PROP_RANDOM) {
     new iModelIndex;
+    // If the index is a negative number, we are picking a random prop.
+    // Prop toggles and force-disabling props are special values for sm_prop, disregard here.
     if (propIndex <= PROP_RANDOM) {
         // GetRandomInt is inclusive, so last model index = size of array minus one.
         iModelIndex = GetRandomInt(0, GetArraySize(g_hModelNames) - 1);
@@ -600,7 +602,7 @@ ProcessConfigFile() {
 ReadPropConfigurationFile(const String:fileName[]) {
     new String:sPropFileFullPath[PLATFORM_MAX_PATH];
     new String:sPropFilePath[128];
-    Format(sPropFilePath, sizeof(sPropFilePath), "data/propbonusround/%s.txt", fileName);
+    Format(sPropFilePath, sizeof(sPropFilePath), "data/propify/%s.txt", fileName);
     BuildPath(Path_SM, sPropFileFullPath, sizeof(sPropFileFullPath), sPropFilePath);
 
     if (!FileExists(sPropFileFullPath) && StrEqual(fileName, PROPLIST_BASEFILE)) {
@@ -608,7 +610,7 @@ ReadPropConfigurationFile(const String:fileName[]) {
         LogMessage("Models file not found at %s. Auto-creating file...", sPropFilePath);
         
         new String:sConfigDir[PLATFORM_MAX_PATH];
-        BuildPath(Path_SM, sConfigDir, sizeof(sConfigDir), "data/propbonusround/");
+        BuildPath(Path_SM, sConfigDir, sizeof(sConfigDir), "data/propify/");
         if (!DirExists(sConfigDir)) {
             CreateDirectory(sConfigDir, 511);
         }
