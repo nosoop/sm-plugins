@@ -19,13 +19,14 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "2.0.2"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.1.0"     // Plugin version.  Am I doing semantic versioning right?
 
 #define PROP_COMMAND            "sm_prop"   // Default prop command name.
 #define PROP_NO_CUSTOM_SPEED    0           // Special value of sm_propbonus_forcespeed that disables the speed override.
                                             // (Keep unchanged as 0 isn't a valid speed anyways.)
 
 #define PROP_RANDOM             -1          // Value for an unspecified prop to force a player into.
+#define PROP_RANDOM_TOGGLE      -2          // Value to turn a player into a random prop or to turn them out of a prop.
 
 #define PROPLIST_BASEFILE       "base"      // Base configuration file.
 #define PROPLIST_ROOT           0           // Constants for sections of the configuration. (No reads.)
@@ -219,10 +220,10 @@ public Action:Command_Propplayer(client, args) {
     decl target_list[MAXPLAYERS];
     decl target_count;
     decl bool:tn_is_ml;
-    new propIndex = PROP_RANDOM;
+    new propIndex = PROP_RANDOM_TOGGLE;
     
     if (args < 1) {
-        ReplyToCommand(client, "[SM] Usage: sm_prop <#userid|name>");
+        ReplyToCommand(client, "[SM] Usage: sm_prop <#userid|name> [propindex] - toggles prop on a player.  [propindex] can be one of the following: -2 = toggle into and out of random prop, -1 = random prop (reroll if already a prop), 0 and up to select one of the loaded props.");
         return Plugin_Handled;
     }
     
@@ -404,24 +405,29 @@ KillClientOwnedEntity(client, const String:sEntityName[], const String:sServerEn
 }
 
 // Action to prop a player.  Do not show activity here if targetting multiple players.
-PerformPropPlayer(client, target, propIndex = PROP_RANDOM, bool:bShowActivity = true) {
+PerformPropPlayer(client, target, propIndex = PROP_RANDOM_TOGGLE, bool:bShowActivity = true) {
     if(!IsClientInGame(target) || !IsPlayerAlive(target))
         return;
     
-    if(!g_bIsProp[target] || propIndex >= 0) {
-        new iModelCount = GetArraySize(g_hModelNames) - 1;
-        if (propIndex > iModelCount) {
-            ReplyToCommand(client, "[SM] Failed to prop %N: prop index must be between 0 and %d.", target, iModelCount);
-            return;
+    if(!g_bIsProp[target] || propIndex >= PROP_RANDOM) {
+        if (g_bIsProp[target] && propIndex == PROP_RANDOM_TOGGLE) {
+            UnpropPlayer(target, true);
+        } else {
+            new iModelCount = GetArraySize(g_hModelNames) - 1;
+            propIndex = PROP_RANDOM;
+            if (propIndex > iModelCount || propIndex <= PROP_RANDOM_TOGGLE) {
+                ReplyToCommand(client, "[SM] Failed to prop %N: prop index must be between -1 (random prop) and %d.", target, iModelCount);
+                return;
+            }
+            PropPlayer(target, propIndex);
         }
-        PropPlayer(target, propIndex);
     } else {
         UnpropPlayer(target, true);
     }
     
     LogAction(client, target, "\"%L\" %s prop on \"%L\"", client, g_bIsProp[target] ? "set" : "removed", target);
     if (bShowActivity) {
-        ShowActivity(client, "%s prop on %N", g_bIsProp[target] ? "set" : "removed", target);
+        ShowActivity(client, "%s prop on %N.", g_bIsProp[target] ? "Set" : "Removed", target);
     }
 }
 
