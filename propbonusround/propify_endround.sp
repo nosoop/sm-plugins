@@ -20,7 +20,12 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "2.0.0"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.1.0"     // Plugin version.  Am I doing semantic versioning right?
+
+                                            // In humiliation...
+#define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
+#define UNPROP_DMG_PLAYER       1           // Props are lost by taking damage from another player.
+#define UNPROP_DMG_ANY          2           // Props are lost by taking any damage.
 
 new Handle:Cvar_AdminFlag = INVALID_HANDLE;
 
@@ -28,7 +33,7 @@ new Handle:Cvar_AdminFlag = INVALID_HANDLE;
 new Handle:g_hCPluginEnabled = INVALID_HANDLE,      bool:g_bPluginEnabled;      // sm_propbonus_enabled
 new Handle:g_hCAdminOnly = INVALID_HANDLE,          bool:g_bAdminOnly;          // sm_propbonus_adminonly
 new Handle:g_hCAnnouncePropRound = INVALID_HANDLE,  bool:g_bAnnouncePropRound;  // sm_propbonus_announcement
-new Handle:g_hCDmgUnprops = INVALID_HANDLE,         bool:g_bDmgUnprops;         // sm_propbonus_damageunprops
+new Handle:g_hCDmgUnprops = INVALID_HANDLE,         g_iDmgUnprops;              // sm_propbonus_damageunprops
 new Handle:g_hCHumiliationRespawn = INVALID_HANDLE, bool:g_bHumiliationRespawn; // sm_propbonus_forcespawn
 
 new bool:g_bIsPlayerAdmin[MAXPLAYERS + 1];
@@ -63,10 +68,14 @@ public OnPluginStart() {
     g_hCAnnouncePropRound = CreateConVar("sm_propbonus_announcement", "1", "Whether or not an announcement is made about the prop hunting end-round.");
     HookConVarChange(g_hCAnnouncePropRound, Cvars_Changed);
 
-    g_hCDmgUnprops = CreateConVar("sm_propbonus_damageunprops", "0", "Whether or not damage inflicted on hiding players during the humiliation round will be unpropped.");
+    g_hCDmgUnprops = CreateConVar("sm_propbonus_damageunprops", "0", "Whether or not damage taken by hiding players during the humiliation round are unpropped.\n" ...
+            "  Value can be one of the following:\n" ...
+            "  0 = Damage never unprops players,\n" ...
+            "  1 = Damage from players unprops,\n" ...
+            "  2 = Any damage unprops.");
     HookConVarChange(g_hCDmgUnprops, Cvars_Changed);
 
-    g_hCHumiliationRespawn = CreateConVar("sm_propbonus_forcespawn", "0", "Whether or not dead players will be respawned and turned into a prop.");
+    g_hCHumiliationRespawn = CreateConVar("sm_propbonus_forcespawn", "0", "Whether or not dead players are respawned and turned into a prop.");
     HookConVarChange(g_hCHumiliationRespawn, Cvars_Changed);
         
     // Hook round events to set and unset props.
@@ -99,24 +108,24 @@ public OnConfigsExecuted() {
     g_bPluginEnabled = GetConVarBool(g_hCPluginEnabled);
     GetConVarString(Cvar_AdminFlag, g_sCharAdminFlag, sizeof(g_sCharAdminFlag));
 
-    g_bDmgUnprops = GetConVarInt(g_hCDmgUnprops) != 0;
+    g_iDmgUnprops = GetConVarInt(g_hCDmgUnprops) != 0;
     g_bAdminOnly = GetConVarInt(g_hCAdminOnly) != 0;
     g_bAnnouncePropRound = GetConVarInt(g_hCAnnouncePropRound) != 0;
     g_bHumiliationRespawn = GetConVarInt(g_hCHumiliationRespawn) != 0;
 }
 
 public Hook_PostPlayerHurt(Handle:event, const String:name[], bool:dontBroadcast) {
-    if(!g_bPluginEnabled || !g_bBonusRound || !g_bDmgUnprops)
+    if(!g_bPluginEnabled || !g_bBonusRound || g_iDmgUnprops == UNPROP_DMG_NEVER)
         return;
     
     new client = GetClientOfUserId(GetEventInt(event, "userid"));
     new attacker = GetClientOfUserId(GetEventInt(event, "attacker"));
 
-    if(client < 1 || attacker < 1 || client == attacker)
-        return;
-
-    // Unprop player if attacked by another player.
-    UnpropPlayer(client);
+    if (attacker < 1 && g_iDmgUnprops >= UNPROP_DMG_PLAYER) {
+        UnpropPlayer(client, true);
+    } else if (g_iDmgUnprops >= UNPROP_DMG_ANY) {
+        UnpropPlayer(client, true);
+    }
 }
 
 public Hook_PostRoundWin(Handle:event, const String:name[], bool:dontBroadcast) {
@@ -245,7 +254,7 @@ public Cvars_Changed(Handle:convar, const String:oldValue[], const String:newVal
             }
         }
     } else if (convar == g_hCDmgUnprops) {
-        g_bDmgUnprops = StringToInt(newValue) != 0;
+        g_iDmgUnprops = StringToInt(newValue);
     } else if (convar == g_hCAdminOnly) {
         g_bAdminOnly = StringToInt(newValue) != 0;
     } else if (convar == g_hCAnnouncePropRound) {
