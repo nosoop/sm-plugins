@@ -20,7 +20,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "2.1.2"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.1.3"     // Plugin version.  Am I doing semantic versioning right?
 
                                             // In humiliation...
 #define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
@@ -36,7 +36,10 @@ new Handle:g_hCAnnouncePropRound = INVALID_HANDLE,  bool:g_bAnnouncePropRound;  
 new Handle:g_hCDmgUnprops = INVALID_HANDLE,         g_iDmgUnprops;              // sm_propbonus_damageunprops
 new Handle:g_hCHumiliationRespawn = INVALID_HANDLE, bool:g_bHumiliationRespawn; // sm_propbonus_forcespawn
 
+// Check plugin-controlled glow state.
 new bool:g_bIsPlayerGlowing[MAXPLAYERS + 1];
+
+// Check if a player is part of the admin group to be propped.
 new bool:g_bIsPlayerAdmin[MAXPLAYERS + 1];
 
 // Humiliation mode handling.
@@ -130,15 +133,12 @@ public Hook_PostPlayerHurt(Handle:event, const String:name[], bool:dontBroadcast
         return;
     }
     
-    if (attacker < 1 && g_iDmgUnprops >= UNPROP_DMG_PLAYER) {
+    if (attacker > 0 && attacker == client && g_iDmgUnprops >= UNPROP_DMG_PLAYER) {
         SetPlayerGlow(true);
+        PrintToChat(client, "Another player attacked you and made you visible; run!");
     } else if (g_iDmgUnprops >= UNPROP_DMG_ANY) {
         SetPlayerGlow(true);
-    }
-    
-    // Do something if the player was just set to glow.
-    if (g_bIsPlayerGlowing[client]) {
-        // TODO print hint message about being set to glow
+        PrintToChat(client, "You've taken damage and now the enemy team can see you!");
     }
 }
 
@@ -151,11 +151,8 @@ public Hook_PostRoundWin(Handle:event, const String:name[], bool:dontBroadcast) 
     
     if (!IsEntLimitReached()) {
         if (g_bAnnouncePropRound) {
-            PrintToChatAll("\x01\x04-------------------------------------------\x01");
-            PrintToChatAll("\x01\x04**Round-End Prop Hunt ACTIVE!**\x01");
-            PrintToChatAll("\x01\x04-------------------------------------------\x01");
+            PrintToChatAll("\x01* Round-End Prop Hunt is \x04active\x01!");
         }
-        
         CreateTimer(0.1, Timer_EquipProps, _, TIMER_FLAG_NO_MAPCHANGE);
     }
 }
@@ -193,13 +190,16 @@ public Action:Timer_EquipProps(Handle:timer) {
         if (!IsPlayerAlive(x)) {
             if (g_bHumiliationRespawn) {
                 TF2_RespawnPlayer(x);
-                PropPlayer(x);
             }
-            continue;
         }
 
         if(IsPlayerAlive(x)) {
             PropPlayer(x);
+            if (g_iWinningTeam != 0) {
+                PrintCenterText(x, "You've been turned into a prop!  Blend in!");
+            } else {
+                PrintCenterText(x, "Everyone's been turned into a prop!");
+            }
         }
     }
     return Plugin_Handled;

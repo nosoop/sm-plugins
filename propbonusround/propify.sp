@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "2.1.4"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.1.5"     // Plugin version.  Am I doing semantic versioning right?
 
 #define PROP_COMMAND            "sm_prop"   // Default prop command name.
 #define PROP_NO_CUSTOM_SPEED    0           // Special value of sm_propbonus_forcespeed that disables the speed override.
@@ -283,7 +283,6 @@ PropPlayer(client, propIndex = PROP_RANDOM) {
     AcceptEntityInput(client, "SetCustomModel");
     
     // Print prop name and such to the client.
-    PrintCenterText(client, "You are a %s!", sName);
     PrintToChat(client,"\x01You are disguised as a \x04%s\x01!", sName);
 
     // If the client was already a prop, the model change is all that needs to be done.
