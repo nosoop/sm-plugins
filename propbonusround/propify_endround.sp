@@ -20,7 +20,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "2.1.0"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.1.1"     // Plugin version.  Am I doing semantic versioning right?
 
                                             // In humiliation...
 #define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
@@ -36,6 +36,7 @@ new Handle:g_hCAnnouncePropRound = INVALID_HANDLE,  bool:g_bAnnouncePropRound;  
 new Handle:g_hCDmgUnprops = INVALID_HANDLE,         g_iDmgUnprops;              // sm_propbonus_damageunprops
 new Handle:g_hCHumiliationRespawn = INVALID_HANDLE, bool:g_bHumiliationRespawn; // sm_propbonus_forcespawn
 
+new bool:g_bIsPlayerGlowing[MAXPLAYERS + 1];
 new bool:g_bIsPlayerAdmin[MAXPLAYERS + 1];
 
 // Humiliation mode handling.
@@ -68,11 +69,11 @@ public OnPluginStart() {
     g_hCAnnouncePropRound = CreateConVar("sm_propbonus_announcement", "1", "Whether or not an announcement is made about the prop hunting end-round.");
     HookConVarChange(g_hCAnnouncePropRound, Cvars_Changed);
 
-    g_hCDmgUnprops = CreateConVar("sm_propbonus_damageunprops", "0", "Whether or not damage taken by hiding players during the humiliation round are unpropped.\n" ...
+    g_hCDmgUnprops = CreateConVar("sm_propbonus_damageglow", "0", "Whether or not damage taken by hiding players during the humiliation round are set to glow, revealing them.\n" ...
             "  Value can be one of the following:\n" ...
-            "  0 = Damage never unprops players,\n" ...
-            "  1 = Damage from players unprops,\n" ...
-            "  2 = Any damage unprops.");
+            "  0 = Damage never makes them glow,\n" ...
+            "  1 = Damage from other players makes them glow,\n" ...
+            "  2 = Any damage makes them glow.");
     HookConVarChange(g_hCDmgUnprops, Cvars_Changed);
 
     g_hCHumiliationRespawn = CreateConVar("sm_propbonus_forcespawn", "0", "Whether or not dead players are respawned and turned into a prop.");
@@ -91,10 +92,14 @@ HookPropBonusRoundPluginEvents(bool:bHook) {
         
         // Hook player events to unset prop on death and remove prop on player when hit if desired.
         HookEvent("player_hurt", Hook_PostPlayerHurt);
+        
+        // Hook round start event to unset player glow.
+        HookEvent("teamplay_round_start", Hook_PostRoundStart);
     } else {
         // Unhook events.
         UnhookEvent("teamplay_round_win", Hook_PostRoundWin);
         UnhookEvent("player_hurt", Hook_PostPlayerHurt);
+        UnhookEvent("teamplay_round_start", Hook_PostRoundStart);
     }
 }
 
@@ -120,11 +125,20 @@ public Hook_PostPlayerHurt(Handle:event, const String:name[], bool:dontBroadcast
     
     new client = GetClientOfUserId(GetEventInt(event, "userid"));
     new attacker = GetClientOfUserId(GetEventInt(event, "attacker"));
-
+    
+    if (g_bIsPlayerGlowing[client]) {
+        return;
+    }
+    
     if (attacker < 1 && g_iDmgUnprops >= UNPROP_DMG_PLAYER) {
-        UnpropPlayer(client, true);
+        g_bIsPlayerGlowing[client] = true;
     } else if (g_iDmgUnprops >= UNPROP_DMG_ANY) {
-        UnpropPlayer(client, true);
+        g_bIsPlayerGlowing[client] = true;
+    }
+    
+    if (g_bIsPlayerGlowing[client]) {
+        SetEntProp(client, Prop_Send, "m_bGlowEnabled", 1, 1);
+        // TODO print hint message about being set to glow
     }
 }
 
@@ -146,12 +160,14 @@ public Hook_PostRoundWin(Handle:event, const String:name[], bool:dontBroadcast) 
     }
 }
 
-public Hook_PostPlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast) {
-    new client = GetClientOfUserId(GetEventInt(event, "userid"));
-    
-    // If they switched classes or something, unprop them for now.
-    // TODO Fix?
-    UnpropPlayer(client, true);
+public Hook_PostRoundStart(Handle:event, const String:name[], bool:dontBroadcast) {
+    // Set unglow on all players that have glow set by the plugin.
+    for (new i = 1; i <= MaxClients; i++) {
+        if (IsClientInGame(i) && !g_bIsPlayerGlowing[i]) {
+            SetEntProp(i, Prop_Send, "m_bGlowEnabled", 0, 1);
+            g_bIsPlayerGlowing[i] = false;
+        }
+    }
 }
 
 public Action:Timer_EquipProps(Handle:timer) {
@@ -255,6 +271,14 @@ public Cvars_Changed(Handle:convar, const String:oldValue[], const String:newVal
         }
     } else if (convar == g_hCDmgUnprops) {
         g_iDmgUnprops = StringToInt(newValue);
+        
+        if (g_iDmgUnprops == UNPROP_DMG_NEVER) {
+            // Set unglow.
+            for (new i = 1; i <= MaxClients; i++) {
+                if (IsClientInGame(i))
+                    SetEntProp(i, Prop_Send, "m_bGlowEnabled", 0, 1);
+            }
+        }
     } else if (convar == g_hCAdminOnly) {
         g_bAdminOnly = StringToInt(newValue) != 0;
     } else if (convar == g_hCAnnouncePropRound) {
