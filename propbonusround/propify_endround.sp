@@ -20,7 +20,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "2.1.1"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.1.2"     // Plugin version.  Am I doing semantic versioning right?
 
                                             // In humiliation...
 #define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
@@ -131,13 +131,13 @@ public Hook_PostPlayerHurt(Handle:event, const String:name[], bool:dontBroadcast
     }
     
     if (attacker < 1 && g_iDmgUnprops >= UNPROP_DMG_PLAYER) {
-        g_bIsPlayerGlowing[client] = true;
+        SetPlayerGlow(true);
     } else if (g_iDmgUnprops >= UNPROP_DMG_ANY) {
-        g_bIsPlayerGlowing[client] = true;
+        SetPlayerGlow(true);
     }
     
+    // Do something if the player was just set to glow.
     if (g_bIsPlayerGlowing[client]) {
-        SetEntProp(client, Prop_Send, "m_bGlowEnabled", 1, 1);
         // TODO print hint message about being set to glow
     }
 }
@@ -203,6 +203,11 @@ public Action:Timer_EquipProps(Handle:timer) {
         }
     }
     return Plugin_Handled;
+}
+
+SetPlayerGlow(client) {
+    SetEntProp(client, Prop_Send, "m_bGlowEnabled", 1, 1);
+    g_bIsPlayerGlowing[client] = true;
 }
 
 CheckGame() {
