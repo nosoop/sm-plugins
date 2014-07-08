@@ -5,7 +5,7 @@
 #include <sdkhooks>
 
 // Global definitions
-#define PLUGIN_VERSION "1.2.1"
+#define PLUGIN_VERSION "1.2.2"
 
 // Boolean arrays to determine which clients do 0.01 damage and take 9999.0 damage.
 new bool:g_bClientNullDamage[MAXPLAYERS+1] = {false, ... };
@@ -96,6 +96,10 @@ public Action:Command_Nullify(client, args) {
                 toggle ? "Toggled" : "Forced", target_name,
                 g_bClientNullDamage[target_list[0]] ? "almost zero" : "normal");
         PrintToAdmins(message, "f");
+        
+        if (g_bClientNullDamage[target] && IsValidAdmin(target, "f") && target != client) {
+            PrintCenterText(target, "You've been nullified.");
+        }
     } else {
         if (!toggle) {
             for (new i = 0; i < target_count; i++) {
@@ -159,6 +163,10 @@ public Action:Command_Rektify(client, args) {
                 toggle ? "Toggled" : "Forced", target_name,
                 g_bClientMassiveDamage[target_list[0]] ? "stupid" : "normal");
         PrintToAdmins(message, "f");
+        
+        if (g_bClientMassiveDamage[target] && IsValidAdmin(target, "f") && target != client) {
+            PrintCenterText(target, "You've been designated as 'rekt'.");
+        }
     } else {
         if (!toggle) {
             for (new i = 0; i < target_count; i++) {
