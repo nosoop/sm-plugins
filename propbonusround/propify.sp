@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "2.2.0"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.2.1"     // Plugin version.  Am I doing semantic versioning right?
 
 #define PROP_COMMAND            "sm_prop"   // Default prop command name.
 #define PROP_NO_CUSTOM_SPEED    0           // Special value of sm_propbonus_forcespeed that disables the speed override.
@@ -263,6 +263,8 @@ public Native_IsClientProp(Handle:plugin, numParams) {
 }
 
 // Turns a client into a prop.  Return value is the index value of the prop selected.
+// forceThirdPerson forces a switch into third-person view.
+// If you are specifically spawning a dead player during humiliation, enable it.
 PropPlayer(client, propIndex = PROP_RANDOM, bool:forceThirdPerson = true) {
     new iModelIndex;
     // If the index is a negative number, we are picking a random prop.

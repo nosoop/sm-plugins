@@ -20,7 +20,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "2.1.4"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.1.5"     // Plugin version.  Am I doing semantic versioning right?
 
                                             // In humiliation...
 #define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
@@ -175,12 +175,12 @@ public Action:Timer_EquipProps(Handle:timer) {
             continue;
         }
         
-        if(GetClientTeam(x) == g_iWinningTeam) {
+        if (GetClientTeam(x) == g_iWinningTeam) {
             continue;
         }
                 
         //If player is already a prop, skip id.
-        if(IsClientProp(x)) {
+        if (IsClientProp(x)) {
             continue;
         }
         
@@ -196,7 +196,14 @@ public Action:Timer_EquipProps(Handle:timer) {
             }
         }
 
-        if(IsPlayerAlive(x)) {
+        if (IsPlayerAlive(x)) {
+            // Kill off any existing ragdoll entities to prevent the camera from focusing on it.
+            
+            new hRagdoll = GetEntPropEnt(x, Prop_Send, "m_hRagdoll");
+            if (IsValidEntity(hRagdoll)) {
+                AcceptEntityInput(hRagdoll, "kill");
+            }
+            
             PropPlayer(x, _, bClientJustRespawned);
             
             if (g_iWinningTeam != 0) {
