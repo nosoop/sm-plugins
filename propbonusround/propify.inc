@@ -17,16 +17,19 @@ public __pl_propify_SetNTVOptional() {
     MarkNativeAsOptional("PropPlayer");
     MarkNativeAsOptional("UnropPlayer");
     MarkNativeAsOptional("IsClientProp");
+    MarkNativeAsOptional("SetThirdPersonOnProp");
 }
 
 /**
  * Attempts to set a prop on a player.
  *
- * @param client        Client index.
- * @param propIndex     The prop to use.
- * @return              Boolean noting that the method call successfully propped a player.
+ * @param client            Client index.
+ * @param propIndex         The prop to use.
+ * @param forceThirdPerson  Whether or not to force third person mode.
+ *                          (False if they are being propped at end-round.)
+ * @return                  Boolean noting that the method call successfully propped a player.
  */
-native PropPlayer(client, propIndex = -1);
+native PropPlayer(client, propIndex = -1, bool:forceThirdPerson = true);
 
 /**
  * Attempts to unprop a player.

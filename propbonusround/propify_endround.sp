@@ -20,7 +20,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "2.1.3"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.1.4"     // Plugin version.  Am I doing semantic versioning right?
 
                                             // In humiliation...
 #define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
@@ -169,6 +169,8 @@ public Hook_PostRoundStart(Handle:event, const String:name[], bool:dontBroadcast
 
 public Action:Timer_EquipProps(Handle:timer) {
     for (new x = 1; x <= MaxClients; x++) {
+        new bool:bClientJustRespawned;
+        
         if(!IsClientInGame(x)) {
             continue;
         }
@@ -190,11 +192,13 @@ public Action:Timer_EquipProps(Handle:timer) {
         if (!IsPlayerAlive(x)) {
             if (g_bHumiliationRespawn) {
                 TF2_RespawnPlayer(x);
+                bClientJustRespawned = true;
             }
         }
 
         if(IsPlayerAlive(x)) {
-            PropPlayer(x);
+            PropPlayer(x, _, bClientJustRespawned);
+            
             if (g_iWinningTeam != 0) {
                 PrintCenterText(x, "You've been turned into a prop!  Blend in!");
             } else {

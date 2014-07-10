@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "2.1.5"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.2.0"     // Plugin version.  Am I doing semantic versioning right?
 
 #define PROP_COMMAND            "sm_prop"   // Default prop command name.
 #define PROP_NO_CUSTOM_SPEED    0           // Special value of sm_propbonus_forcespeed that disables the speed override.
@@ -263,7 +263,7 @@ public Native_IsClientProp(Handle:plugin, numParams) {
 }
 
 // Turns a client into a prop.  Return value is the index value of the prop selected.
-PropPlayer(client, propIndex = PROP_RANDOM) {
+PropPlayer(client, propIndex = PROP_RANDOM, bool:forceThirdPerson = true) {
     new iModelIndex;
     // If the index is a negative number, we are picking a random prop.
     // Prop toggles and force-disabling props are special values for sm_prop, disregard here.
@@ -296,7 +296,9 @@ PropPlayer(client, propIndex = PROP_RANDOM) {
     AcceptEntityInput(client, "SetCustomModelRotates");
     
     // Set client to third-person and strip weapons and force speed override if desired.
-    SetThirdPerson(client, true, g_bUseDirtyHackForThirdPerson);
+    if (forceThirdPerson) {
+        SetThirdPerson(client, true, g_bUseDirtyHackForThirdPerson);
+    }
     HidePlayerItemsAndDoPropStuff(client);
         
     return iModelIndex;
@@ -306,9 +308,10 @@ PropPlayer(client, propIndex = PROP_RANDOM) {
 public Native_PropPlayer(Handle:plugin, numParams) {
     new client = GetNativeCell(1);
     new propIndex = numParams > 1 ? GetNativeCell(2) : PROP_RANDOM;
+    new bool:forceThirdPerson = numParams > 2 ? GetNativeCell(3) : true;
     
     if(client >= 1 && client <= MAXPLAYERS && IsClientInGame(client) && IsPlayerAlive(client)) {
-        PropPlayer(client, propIndex);
+        PropPlayer(client, propIndex, forceThirdPerson);
         return true;
     }
     
