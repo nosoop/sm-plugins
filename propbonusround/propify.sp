@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "2.2.1"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.2.2"     // Plugin version.  Am I doing semantic versioning right?
 
 #define PROP_COMMAND            "sm_prop"   // Default prop command name.
 #define PROP_NO_CUSTOM_SPEED    0           // Special value of sm_propbonus_forcespeed that disables the speed override.
@@ -69,7 +69,8 @@ public Plugin:myinfo = {
 
 public OnPluginStart() {
     CheckGame();
-
+    LoadTranslations("common.phrases");
+    
     CreateConVar("sm_propify_version", PLUGIN_VERSION, "Version of Propify!", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_DONTRECORD);
     
     // Create and hook cvars.
@@ -247,13 +248,13 @@ public Action:Command_Propplayer(client, args) {
     }
     
     for(new i = 0; i < target_count; i++) {
-        if(IsClientInGame(target_list[i]) && IsPlayerAlive(target_list[i])) {
-            PerformPropPlayer(client, target_list[i], propIndex, target_count == 1);
+        if (IsClientInGame(target_list[i]) && IsPlayerAlive(target_list[i])) {
+            PerformPropPlayer(client, target_list[i], propIndex);
         }
     }
-    if (target_count > 1) {
-        ShowActivity(client, "Toggled prop on %N", target_name);
-    }
+    
+    ShowActivity2(client, "[SM] ", "Toggled prop on %s.", target_name);
+    
     return Plugin_Handled;
 }
 
@@ -415,8 +416,8 @@ KillClientOwnedEntity(client, const String:sEntityName[], const String:sServerEn
     }
 }
 
-// Action to prop a player.  Do not show activity here if targetting multiple players.
-PerformPropPlayer(client, target, propIndex = PROP_RANDOM_TOGGLE, bool:bShowActivity = true) {
+// Action to prop a player.
+PerformPropPlayer(client, target, propIndex = PROP_RANDOM_TOGGLE) {
     if(!IsClientInGame(target) || !IsPlayerAlive(target))
         return;
     
@@ -439,9 +440,6 @@ PerformPropPlayer(client, target, propIndex = PROP_RANDOM_TOGGLE, bool:bShowActi
     }
     
     LogAction(client, target, "\"%L\" %s prop on \"%L\"", client, g_bIsProp[target] ? "set" : "removed", target);
-    if (bShowActivity) {
-        ShowActivity(client, "%s prop on %N.", g_bIsProp[target] ? "Set" : "Removed", target);
-    }
 }
 
 // Enables and disables third-person mode.
