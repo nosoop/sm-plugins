@@ -5,7 +5,7 @@
 #include <sdkhooks>
 
 // Global definitions
-#define PLUGIN_VERSION "1.2.2"
+#define PLUGIN_VERSION "1.2.3"
 
 // Boolean arrays to determine which clients do 0.01 damage and take 9999.0 damage.
 new bool:g_bClientNullDamage[MAXPLAYERS+1] = {false, ... };
@@ -48,6 +48,11 @@ public OnClientPutInServer(client) {
         g_bClientMassiveDamage[client] = false;
         SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
     }
+}
+
+public OnEntityCreated(entity, const String:cls[]) {
+	if (StrEqual(cls, "obj_sentrygun") || StrEqual(cls, "obj_dispenser") || StrEqual(cls, "obj_teleporter") || StrEqual(cls, "obj_attachment_sapper"))
+		SDKHook(entity, SDKHook_OnTakeDamage, OnTakeDamage);
 }
 
 public Action:Command_Nullify(client, args) {
@@ -230,7 +235,7 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
         return Plugin_Changed;
     }
     
-    if (g_bClientMassiveDamage[victim]) {
+    if (victim <= MaxClients &&  g_bClientMassiveDamage[victim]) {
         // Do stupid damage on players with this flag.
         damage = 9999.0;
         return Plugin_Changed;
