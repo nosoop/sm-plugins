@@ -20,7 +20,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "2.1.6"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.1.7"     // Plugin version.  Am I doing semantic versioning right?
 
                                             // In humiliation...
 #define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
@@ -192,7 +192,8 @@ public Action:Timer_EquipProps(Handle:timer) {
         if (!IsPlayerAlive(x)) {
             if (g_bHumiliationRespawn) {
                 TF2_RespawnPlayer(x);
-                bClientJustRespawned = true;
+                // bClientJustRespawned = true;
+                // Player will not be in third-person by default.
             }
         }
 
