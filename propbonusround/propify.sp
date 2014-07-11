@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "2.2.2"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.2.3"     // Plugin version.  Am I doing semantic versioning right?
 
 #define PROP_COMMAND            "sm_prop"   // Default prop command name.
 #define PROP_NO_CUSTOM_SPEED    0           // Special value of sm_propbonus_forcespeed that disables the speed override.
@@ -468,7 +468,7 @@ SetThirdPerson(client, bool:bEnabled, bool:bUseDirtyHack = false) {
          */
         SetEntPropEnt(client, Prop_Send, "m_hObserverTarget", bEnabled ? -1 : client);
         SetEntProp(client, Prop_Send, "m_iObserverMode", bEnabled ? 1 : 0);
-        SetEntProp(client, Prop_Send, "m_iFOV", bEnabled ? 110 : 90);
+        SetEntProp(client, Prop_Send, "m_iFOV", bEnabled ? 100 : 90);
     }
     
     g_bIsInThirdPerson[client] = bEnabled;
