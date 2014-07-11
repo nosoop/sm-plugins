@@ -20,7 +20,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "2.1.7"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.1.8"     // Plugin version.  Am I doing semantic versioning right?
 
                                             // In humiliation...
 #define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
@@ -160,7 +160,7 @@ public Hook_PostRoundWin(Handle:event, const String:name[], bool:dontBroadcast) 
 public Hook_PostRoundStart(Handle:event, const String:name[], bool:dontBroadcast) {
     // Set unglow on all players that have glow set by the plugin.
     for (new i = 1; i <= MaxClients; i++) {
-        if (IsClientInGame(i) && !g_bIsPlayerGlowing[i]) {
+        if (IsClientInGame(i) && g_bIsPlayerGlowing[i]) {
             SetEntProp(i, Prop_Send, "m_bGlowEnabled", 0, 1);
             g_bIsPlayerGlowing[i] = false;
         }
