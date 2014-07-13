@@ -13,6 +13,12 @@ public SharedPlugin:__pl_propify = {
 #endif
 };
 
+#define PROP_NO_CUSTOM_SPEED    0           // Special value of sm_propbonus_forcespeed that disables the speed override.
+                                            // (Keep unchanged as 0 isn't a valid speed anyways.)
+
+#define PROP_RANDOM             -1          // Value for an unspecified prop to force a player into.
+#define PROP_RANDOM_TOGGLE      -2          // Value to turn a player into a random prop or to turn them out of a prop.
+
 public __pl_propify_SetNTVOptional() {
     MarkNativeAsOptional("PropPlayer");
     MarkNativeAsOptional("UnropPlayer");
