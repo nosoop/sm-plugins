@@ -8,7 +8,7 @@
 #include <sdktools>
 #include <sdkhooks>
 
-#define PLUGIN_VERSION          "0.0.0"     // Plugin version.
+#define PLUGIN_VERSION          "0.0.1"     // Plugin version.
 
 #define TIME_EYELANDER_MEAN     10.0        // Final: 60.0
 #define TIME_EYELANDER_DEV      3.0         // Final: 10.0
@@ -34,18 +34,23 @@ public OnPluginStart() {
 }
 
 public OnMapStart() {
+    WelcomeToHell();
+    
+    CreateTimer(GetRandomFloatDeviation(TIME_EYELANDER_MEAN, TIME_EYELANDER_DEV), Timer_PlayEyelanderNoise);
+    CreateTimer(GetRandomFloatDeviation(TIME_UNDERWORLD_MEAN, TIME_UNDERWORLD_DEV), Timer_PlayUnderworldNoise);
+}
+
+public WelcomeToHell() {
     new shakeEntity = CreateEntityByName("env_shake");
     DispatchKeyValueFloat(shakeEntity, "amplitude", 15.0);
     DispatchKeyValueFloat(shakeEntity, "frequency", 220.0);
     DispatchKeyValueFloat(shakeEntity, "duration", 5.0);
-    DispatchKeyValueFloat(shakeEntity, "radius", 10000.0);
+    DispatchKeyValueFloat(shakeEntity, "radius", -1.0);
     DispatchSpawn(shakeEntity);
     
     AcceptEntityInput(shakeEntity, "StartShake");
     CreateTimer(10.0, Timer_KillShake, shakeEntity);
     
-    CreateTimer(GetRandomFloatDeviation(TIME_EYELANDER_MEAN, TIME_EYELANDER_DEV), Timer_PlayEyelanderNoise);
-    CreateTimer(GetRandomFloatDeviation(TIME_UNDERWORLD_MEAN, TIME_UNDERWORLD_DEV), Timer_PlayUnderworldNoise);
     EmitSoundToAll("misc/halloween/gotohell.wav", _, _, _, _, 0.8);
 }
 
