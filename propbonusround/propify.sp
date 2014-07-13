@@ -19,7 +19,9 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>
 
-#define PLUGIN_VERSION          "2.2.3"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.3.0"     // Plugin version.  Am I doing semantic versioning right?
+
+// #def TEST_TOGGLEHUD          1           // Test feature to toggle the HUD while propped.
 
 #define PROP_COMMAND            "sm_prop"   // Default prop command name.
 #define PROP_NO_CUSTOM_SPEED    0           // Special value of sm_propbonus_forcespeed that disables the speed override.
@@ -61,6 +63,10 @@ new bool:g_bIsProp[MAXPLAYERS+1],
     bool:g_bIsPropLocked[MAXPLAYERS+1], bool:g_bRecentlySetPropLock[MAXPLAYERS+1],
     bool:g_bIsInThirdPerson[MAXPLAYERS+1], bool:g_bRecentlySetThirdPerson[MAXPLAYERS+1];
 
+#if defined TEST_TOGGLEHUD
+new bool:g_bHUDVisible[MAXPLAYERS+1] = { true, ... }, bool:g_bRecentlySetToggleHUD[MAXPLAYERS+1];
+#endif
+
 /**
  * Sets whether or not we use the hackish method of setting third-person mode.
  * We need this for props that toggle views during endround.
@@ -83,7 +89,7 @@ public OnPluginStart() {
     // Command to prop a player.
     RegAdminCmd(PROP_COMMAND, Command_Propplayer, ADMFLAG_SLAY, "sm_prop <#userid|name> [propindex] - toggles prop on a player");
     RegAdminCmd("sm_propify_reloadlist", Command_ReloadPropList, ADMFLAG_ROOT, "sm_propify_reloadlist - reloads list of props");
-    
+        
     // Hook round events to set and unset props.
     HookPropifyPluginEvents(true);
 
@@ -196,6 +202,7 @@ public Hook_PostPlayerSpawn(Handle:event, const String:name[], bool:dontBroadcas
     
     // If they switched classes or something, unprop them for now.
     // TODO Fix?
+    SetHUDVisibility(client, true);
     UnpropPlayer(client, true);
 }
 
@@ -509,6 +516,16 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
                 SetPropLockState(client, false);
             }
         }
+    
+        #if defined TEST_TOGGLEHUD
+        if ((buttons & IN_RELOAD) == IN_RELOAD) {
+            if (!g_bRecentlySetToggleHUD[client]) {
+                SetHUDVisibility(client, !g_bHUDVisible[client]);
+                g_bRecentlySetToggleHUD[client] = true;
+                CreateTimer(1.0, UnsetHUDToggleDelay, client);
+            }
+        }
+        #endif
     }
     return Plugin_Continue;
 }
@@ -553,6 +570,22 @@ public Action:UnsetThirdPersonToggleDelay(Handle:timer, any:client) {
     g_bRecentlySetThirdPerson[client] = false;
 }
 
+#if defined TEST_TOGGLEHUD
+/**
+ * Toggle the heads-up display.
+ */
+public Action:UnsetHUDToggleDelay(Handle:timer, any:client) {
+    g_bRecentlySetToggleHUD[client] = false;
+}
+
+public SetHUDVisibility(client, bool:bSetVisible) {
+    SetVariantBool(bSetVisible);
+    AcceptEntityInput(client, "SetHUDVisibility");
+    
+    g_bHUDVisible[client] = bSetVisible;
+}
+#endif
+ 
 public Action:Command_ReloadPropList(client, args) {
     if (!g_bPluginEnabled) {
         return Plugin_Handled;
