@@ -110,7 +110,7 @@ public OnLibraryRemoved(const String:name[]) {
 
 public Action:Command_Vote(client, args) {
 	if (args < 1) {
-		ReplyToCommand(client, "[SM] Usage: sm_vote <question> [Answer1] [Answer2] ... [Answer5]");
+		ReplyToCommand(client, "[SM] Usage: sm_nvote <question> [Answer1] [Answer2] ... [Answer5]");
 		return Plugin_Handled;	
 	}
 	

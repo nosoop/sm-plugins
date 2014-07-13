@@ -3,7 +3,7 @@
 #include <sourcemod>
 #include <tf2_stocks>
 
-#define PL_VERSION "1.0.0"
+#define PL_VERSION "1.0.1"
 
 #define TF_CLASS_SCOUT			1
 #define TF_CLASS_SOLDIER		3
@@ -23,10 +23,6 @@
 #define PANEL_CANCEL_ALREADYOPEN    -2
 #define PANEL_CANCEL_TIMEOUT        -5
 
-new g_iMenuToClass[9] = { TF_CLASS_SCOUT, TF_CLASS_SOLDIER, TF_CLASS_PYRO, TF_CLASS_DEMOMAN, TF_CLASS_HEAVY, TF_CLASS_ENGINEER, TF_CLASS_MEDIC, TF_CLASS_SNIPER, TF_CLASS_SPY };
-new String:g_menuToString[9][10] = { "Scout", "Soldier", "Pyro", "Demoman", "Heavy", "Engineer", "Medic", "Sniper", "Spy" };
-new g_iClientNextClass[MAXPLAYERS+1];
-
 public Plugin:myinfo =
 {
     name        = "[TF2] Queue Class Change",
@@ -35,6 +31,10 @@ public Plugin:myinfo =
     version     = PL_VERSION,
     url         = "https://github.com/nosoop/sm-plugins"
 }
+
+new g_iMenuToClass[9] = { TF_CLASS_SCOUT, TF_CLASS_SOLDIER, TF_CLASS_PYRO, TF_CLASS_DEMOMAN, TF_CLASS_HEAVY, TF_CLASS_ENGINEER, TF_CLASS_MEDIC, TF_CLASS_SNIPER, TF_CLASS_SPY };
+new String:g_menuToString[9][10] = { "Scout", "Soldier", "Pyro", "Demoman", "Heavy", "Engineer", "Medic", "Sniper", "Spy" };
+new g_iClientNextClass[MAXPLAYERS+1];
 
 public OnPluginStart() {
     CreateConVar("sm_arenaclasschange_version", PL_VERSION, "Prints plugin version.", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY);

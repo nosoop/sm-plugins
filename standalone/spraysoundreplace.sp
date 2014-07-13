@@ -5,15 +5,12 @@
 #include <sdkhooks>
 
 // Global definitions
-#define PLUGIN_VERSION "1.0.0"
+#define PLUGIN_VERSION "1.0.1"
 #define MAX_FILE_LEN 80
 
 // Path to custom 
 #define REPLACEMENT_SPRAY_FILE "pikapoo/fart.wav"
 #define DEFAULT_SPRAY_SOUND "player/sprayer.wav"
-
-// Path to sound file.
-new String:g_spraySoundReplacement[MAX_FILE_LEN] = REPLACEMENT_SPRAY_FILE;
 
 // Plugin information
 public Plugin:myinfo =
@@ -24,6 +21,9 @@ public Plugin:myinfo =
     version = PLUGIN_VERSION,
     url = "https://github.com/nosoop/sm-plugins"
 };
+
+// Path to sound file.
+new String:g_spraySoundReplacement[MAX_FILE_LEN] = REPLACEMENT_SPRAY_FILE;
 
 // Plugin started
 public OnPluginStart() {

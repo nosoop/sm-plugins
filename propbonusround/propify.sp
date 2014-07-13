@@ -37,6 +37,14 @@
 
 #define PROPNAME_LENGTH         32          // The maximum length of a prop name.
 
+public Plugin:myinfo = {
+    name = "[TF2] Propify!",
+    author = "nosoop, Prop Bonus Round developers",
+    description = "Turn players into props!",
+    version = PLUGIN_VERSION,
+    url = "https://github.com/nosoop/sm-plugins"
+}
+
 new Handle:hAdminMenu = INVALID_HANDLE;
 
 // Arrays for prop models, names, and a list of additional files to load.
@@ -58,14 +66,6 @@ new bool:g_bIsProp[MAXPLAYERS+1],
  * We need this for props that toggle views during endround.
  */
 new bool:g_bUseDirtyHackForThirdPerson;
-
-public Plugin:myinfo = {
-    name = "[TF2] Propify!",
-    author = "nosoop, Prop Bonus Round developers",
-    description = "Turn players into props!",
-    version = PLUGIN_VERSION,
-    url = "https://github.com/nosoop/sm-plugins"
-}
 
 public OnPluginStart() {
     CheckGame();

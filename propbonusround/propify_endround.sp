@@ -27,6 +27,14 @@
 #define UNPROP_DMG_PLAYER       1           // Props are lost by taking damage from another player.
 #define UNPROP_DMG_ANY          2           // Props are lost by taking any damage.
 
+public Plugin:myinfo = {
+    name = "[TF2] Prop Bonus Round",
+    author = "nosoop, Prop Bonus Round developers",
+    description = "Turns the losing team into random props during bonus round!",
+    version = PLUGIN_VERSION,
+    url = "https://github.com/nosoop/sm-plugins"
+}
+
 new Handle:Cvar_AdminFlag = INVALID_HANDLE;
 
 // ConVars and junk.  For references, see OnPluginStart().
@@ -46,14 +54,6 @@ new bool:g_bIsPlayerAdmin[MAXPLAYERS + 1];
 new bool:g_bBonusRound, g_iWinningTeam;
 
 new String:g_sCharAdminFlag[32];
-
-public Plugin:myinfo = {
-    name = "[TF2] Prop Bonus Round",
-    author = "nosoop, Prop Bonus Round developers",
-    description = "Turns the losing team into random props during bonus round!",
-    version = PLUGIN_VERSION,
-    url = "https://github.com/nosoop/sm-plugins"
-}
 
 public OnPluginStart() {
     CheckGame();

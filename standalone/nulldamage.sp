@@ -5,11 +5,7 @@
 #include <sdkhooks>
 
 // Global definitions
-#define PLUGIN_VERSION "1.2.3"
-
-// Boolean arrays to determine which clients do 0.01 damage and take 9999.0 damage.
-new bool:g_bClientNullDamage[MAXPLAYERS+1] = {false, ... };
-new bool:g_bClientMassiveDamage[MAXPLAYERS+1] = {false, ... };
+#define PLUGIN_VERSION "1.2.4"
 
 // Plugin information
 public Plugin:myinfo =
@@ -20,6 +16,10 @@ public Plugin:myinfo =
     version = PLUGIN_VERSION,
     url = "https://github.com/nosoop/sm-plugins"
 };
+
+// Boolean arrays to determine which clients do 0.01 damage and take 9999.0 damage.
+new bool:g_bClientNullDamage[MAXPLAYERS+1] = {false, ... };
+new bool:g_bClientMassiveDamage[MAXPLAYERS+1] = {false, ... };
 
 // Plugin started
 public OnPluginStart() {
