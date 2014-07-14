@@ -33,7 +33,7 @@ public __pl_propify_SetNTVOptional() {
  * @param propIndex         The prop to use.
  * @param forceThirdPerson  Whether or not to force third person mode.
  *                          (False if they are being propped at end-round.)
- * @return                  Boolean noting that the method call successfully propped a player.
+ * @return                  Index value of the prop the player is propped as, or -1 if not propped.
  */
 native PropPlayer(client, propIndex = -1, bool:forceThirdPerson = true);
 
@@ -45,7 +45,7 @@ native PropPlayer(client, propIndex = -1, bool:forceThirdPerson = true);
  *                      An in-place respawn returns the client's weapons.
  * @return              Boolean noting that the client is now not a prop.
  */
-native UnpropPlayer(client, bool:respawn = false);
+native bool:UnpropPlayer(client, bool:respawn = false);
 
 /**
  * Checks whether or not the specified client is currently a prop.

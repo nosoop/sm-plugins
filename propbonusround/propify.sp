@@ -6,10 +6,10 @@
  *
  * 2.0.0 - Changed "Prop Bonus Round" into "Propify!" and moved endround functionality to another plugin.
  *         As such, version numbers will not be synchronized for functionality patches.
- * 1.0.0 - Forked from https://forums.alliedmods.net/showthread.php?p=1096024
  * Forked version was 1.3 in the original post.  See credits for their work there.  They deserve it!
  *
  * See the commits to https://github.com/nosoop/sm-plugins for improvements and updated notes.
+ * This plugin is built with support for TF2Attributes.  The include file is available at: https://forums.alliedmods.net/showthread.php?t=210221
  */
 
 #pragma semicolon 1
@@ -19,28 +19,27 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 #include <tf2attributes>                    // Optional for a different method of removing particle effects.
-                                            // https://forums.alliedmods.net/showthread.php?t=210221
 
-#define PLUGIN_VERSION          "2.4.0"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.4.1"     // Plugin version.  Am I doing semantic versioning right?
 
-// #def TEST_TOGGLEHUD          1           // Test feature to toggle the HUD while propped.
+// Compile-time features:
+// #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
+// #def KILLENT_IF_UNHIDABLE    1           // Kill the entity if TF2Attributes can't be used to hide particle effects.  See [KILLENT_IF_UNHIDABLE].
 
-#define RGBA_INVIS				{255,255,255,0}     // RGBA value for completely invisible.
-#define RGBA_NORMAL				{255,255,255,255}   // RGBA value for plainly visible.    
+#define ALPHA_INVIS             0           // Alpha value for completely invisible.
+#define ALPHA_NORMAL            255         // Alpha value for plainly visible.    
 
 #define PROP_COMMAND            "sm_prop"   // Default prop command name.
-#define PROP_NO_CUSTOM_SPEED    0           // Special value of sm_propbonus_forcespeed that disables the speed override.
-                                            // (Keep unchanged as 0 isn't a valid speed anyways.)
+#define PROP_NO_CUSTOM_SPEED    0           // Value of sm_propbonus_forcespeed that disables the speed override.  0 isn't a valid value anyways.
 
-#define PROP_RANDOM             -1          // Value for an unspecified prop to force a player into.
-#define PROP_RANDOM_TOGGLE      -2          // Value to turn a player into a random prop or to turn them out of a prop.
+#define PROP_RANDOM             -1          // Value to turn a player into a random prop.
+#define PROP_RANDOM_TOGGLE      -2          // Value to turn a player into a random prop or to turn them out of a prop if they are in one.
 
 #define PROPLIST_BASEFILE       "base"      // Base configuration file.
 #define PROPLIST_ROOT           0           // Constants for sections of the configuration. (No reads.)
-#define PROPLIST_PROPS          1           // KV: "prop name" "models/path/to/prop/file.mdl"
-#define PROPLIST_INCLUDELIST    2           // KV: "any value" "file name to load another propconfig"
-#define PROPLIST_SPAWNPOS       3           // KV: "any value" "X Y Z P Y R" (spawn positions and angles?)
-                                            // TODO Move PROPLIST_SPAWNPOS into the Prop End Round plugin.
+#define PROPLIST_PROPS          1           // Section "proplist" - KV: "prop name" "models/path/to/prop/file.mdl"
+#define PROPLIST_INCLUDELIST    2           // Section "includes" - KV: "any value" "file name to load another propconfig"
+#define PROPLIST_SPAWNPOS       3           // Section "spawnpos" - KV: "any value" "X Y Z P Y R" (spawn positions and angles?) -- UNUSED
 
 #define PROPNAME_LENGTH         32          // The maximum length of a prop name.
 
@@ -67,13 +66,12 @@ new Handle:g_hCPropSpeed = INVALID_HANDLE,          g_iPropSpeed;               
 new bool:g_bIsProp[MAXPLAYERS+1],
     bool:g_bIsPropLocked[MAXPLAYERS+1], bool:g_bRecentlySetPropLock[MAXPLAYERS+1],
     bool:g_bIsInThirdPerson[MAXPLAYERS+1], bool:g_bRecentlySetThirdPerson[MAXPLAYERS+1];
-
-// Boolean flag to determine if we can remove unusual effects through the TF2Attributes library.
-new bool:g_bAttributesAvailable = false;
-
-#if defined TEST_TOGGLEHUD
+#if defined PROP_TOGGLEHUD
 new bool:g_bHUDVisible[MAXPLAYERS+1] = { true, ... }, bool:g_bRecentlySetToggleHUD[MAXPLAYERS+1];
 #endif
+
+// Boolean to determine if we can remove particle effects through the TF2Attributes library.
+new bool:g_bAttributesAvailable = false;
 
 /**
  * Sets whether or not we use the hackish method of setting third-person mode.
@@ -96,6 +94,8 @@ public OnPluginStart() {
     
     // Command to prop a player.
     RegAdminCmd(PROP_COMMAND, Command_Propplayer, ADMFLAG_SLAY, "sm_prop <#userid|name> [propindex] - toggles prop on a player");
+    
+    // Command to reload the prop list.  Restricted to root admins as they should be the only ones with possibly access to the data.
     RegAdminCmd("sm_propify_reloadlist", Command_ReloadPropList, ADMFLAG_ROOT, "sm_propify_reloadlist - reloads list of props");
         
     // Hook round events to set and unset props.
@@ -210,12 +210,11 @@ public Hook_PreRoundWin(Handle:event, const String:name[], bool:dontBroadcast) {
 public Hook_PostPlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast) {
     new client = GetClientOfUserId(GetEventInt(event, "userid"));
     
-    #if defined TEST_TOGGLEHUD
+    #if defined PROP_TOGGLEHUD
     SetHUDVisibility(client, true);
     #endif
     
-    // If they switched classes or something, unprop them for now.
-    // TODO Fix?
+    // If they switched classes or something, unprop them.
     UnpropPlayer(client, true);
 }
 
@@ -283,9 +282,10 @@ public Native_IsClientProp(Handle:plugin, numParams) {
     return g_bIsProp[client];
 }
 
-// Turns a client into a prop.  Return value is the index value of the prop selected.
-// forceThirdPerson forces a switch into third-person view.
-// If you are specifically spawning a dead player during humiliation, enable it.
+/**
+ * Turns a client into a prop.  Return value is the index value of the prop selected.
+ * forceThirdPerson forces a switch into third-person view -- if you are specifically spawning a dead player during humiliation, enable it.
+ */
 PropPlayer(client, propIndex = PROP_RANDOM, bool:forceThirdPerson = true) {
     new iModelIndex;
     // If the index is a negative number, we are picking a random prop.
@@ -440,31 +440,27 @@ SetWearableVisinility(client, bool:bVisible) {
 
 /**
  * Sets the visibility of a client-owned entity.
- * NOTE: If TF2Attributes isn't available, this will kill the entity, breaking wearables for a period of time.
+ * NOTE: If [KILLENT_IF_UNHIDABLE] is defined and TF2Attributes is unavailable, this will kill the entity, breaking wearables for a period of time.
+ * If we don't kill the entity, Unusual particle effects will still show.
  */
 SetClientOwnedEntVisibility(client, const String:sEntityName[], const String:sServerEntityName[], bool:bVisible) {
-    if (bVisible && !g_bAttributesAvailable) {
-        // There is no procedure of bringing back killed entities, so let's not waste our time.
-        return;
-    }
-
     new ent = -1;
     while((ent = FindEntityByClassname(ent, sEntityName)) != -1) {      
         if (GetEntDataEnt2(ent, FindSendPropOffs(sServerEntityName, "m_hOwnerEntity")) == client) {
-            if (g_bAttributesAvailable) {
-                // Hide the model by making it invisible.
-                // If TF2Attributes is available, we can try removing a particle effect if it has one.
-                new color[4];
-                color = bVisible ? RGBA_NORMAL : RGBA_INVIS;
-                SetEntityRenderMode(ent, RENDER_TRANSCOLOR);
-                SetEntityRenderColor(ent, color[0], color[1], color[2], color[3]);
-                
-                if (!bVisible && GetEntSendPropOffs(ent, "m_AttributeList") > 0) {
-                    TF2Attrib_RemoveByName(ent, "attach particle effect static");
-                }
-            } else if (!bVisible) {
-                // Waste no time in hiding the model by killing the entity entirely if hiding it.
+            #if defined KILLENT_IF_UNHIDABLE
+            if (!bVisible && !g_bAttributesAvailable) {
                 AcceptEntityInput(ent, "Kill");
+                continue;
+            }
+            #endif
+            
+            // Hide the model by making it invisible.
+            SetEntityRenderMode(ent, RENDER_TRANSCOLOR);
+            SetEntityRenderColor(ent, 255, 255, 255, bVisible ? ALPHA_NORMAL : ALPHA_INVIS);
+            
+            // If TF2Attributes is available, we can try removing a particle effect if it has one.
+            if (g_bAttributesAvailable && !bVisible && GetEntSendPropOffs(ent, "m_AttributeList") > 0) {
+                TF2Attrib_RemoveByName(ent, "attach particle effect static");
             }
         }
     }
@@ -494,38 +490,6 @@ PerformPropPlayer(client, target, propIndex = PROP_RANDOM_TOGGLE) {
     }
     
     LogAction(client, target, "\"%L\" %s prop on \"%L\"", client, g_bIsProp[target] ? "set" : "removed", target);
-}
-
-// Enables and disables third-person mode.
-SetThirdPerson(client, bool:bEnabled, bool:bUseDirtyHack = false) {
-    if (!g_bIsProp[client]) {
-        return;
-    }
-    
-    if (!bUseDirtyHack) {
-        // Default behavior.
-        // Source: https://forums.alliedmods.net/showthread.php?p=1694178?p=1694178
-        SetVariantInt(bEnabled ? 1 : 0);
-        AcceptEntityInput(client, "SetForcedTauntCam");
-    } else {
-        // Prepare to use dirty hack by forcing first-person mode otherwise.
-        SetVariantInt(0);
-        AcceptEntityInput(client, "SetForcedTauntCam");
-        ClientCommand(client, "firstperson");
-    
-        /**
-         * Can't force third-person mode through the taunt camera during humiliation,
-         * so we will use some entity dickery to create third-person mode.
-         *
-         * This third-person mode is a bit laggy when acting on a player, so we only
-         * use it during the special case mentioned above.
-         */
-        SetEntPropEnt(client, Prop_Send, "m_hObserverTarget", bEnabled ? -1 : client);
-        SetEntProp(client, Prop_Send, "m_iObserverMode", bEnabled ? 1 : 0);
-        SetEntProp(client, Prop_Send, "m_iFOV", bEnabled ? 100 : 90);
-    }
-    
-    g_bIsInThirdPerson[client] = bEnabled;
 }
 
 // Global forward to test if a propped client wants to toggle proplock or third-person mode.
@@ -564,7 +528,7 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
             }
         }
     
-        #if defined TEST_TOGGLEHUD
+        #if defined PROP_TOGGLEHUD
         if ((buttons & IN_RELOAD) == IN_RELOAD) {
             if (!g_bRecentlySetToggleHUD[client]) {
                 SetHUDVisibility(client, !g_bHUDVisible[client]);
@@ -612,27 +576,60 @@ public Action:UnsetPropLockToggleDelay(Handle:timer, any:client) {
     g_bRecentlySetPropLock[client] = false;
 }
 
+// Sets third-person mode.  
+SetThirdPerson(client, bool:bEnabled, bool:bUseDirtyHack = false) {
+    if (!g_bIsProp[client]) {
+        return;
+    }
+    
+    if (!bUseDirtyHack) {
+        // Default behavior uses the taunt camera.
+        // Source: https://forums.alliedmods.net/showthread.php?p=1694178?p=1694178
+        SetVariantInt(bEnabled ? 1 : 0);
+        AcceptEntityInput(client, "SetForcedTauntCam");
+    } else {
+        // Prepare to use dirty hack by forcing first-person mode otherwise.
+        SetVariantInt(0);
+        AcceptEntityInput(client, "SetForcedTauntCam");
+        ClientCommand(client, "firstperson");
+    
+        /**
+         * Can't force third-person mode through the taunt camera during humiliation,
+         * so we will use some entity dickery to create third-person mode.
+         *
+         * This third-person mode is a bit laggy when acting on a player, so we only
+         * use it during the special case mentioned above.
+         */
+        SetEntPropEnt(client, Prop_Send, "m_hObserverTarget", bEnabled ? -1 : client);
+        SetEntProp(client, Prop_Send, "m_iObserverMode", bEnabled ? 1 : 0);
+        SetEntProp(client, Prop_Send, "m_iFOV", bEnabled ? 100 : 90);
+    }
+    
+    g_bIsInThirdPerson[client] = bEnabled;
+}
+
 public Action:UnsetThirdPersonToggleDelay(Handle:timer, any:client) {
     // Clear lock on third-person mode.
     g_bRecentlySetThirdPerson[client] = false;
 }
 
-#if defined TEST_TOGGLEHUD
-/**
- * Toggle the heads-up display.
- */
-public Action:UnsetHUDToggleDelay(Handle:timer, any:client) {
-    g_bRecentlySetToggleHUD[client] = false;
-}
-
+#if defined PROP_TOGGLEHUD
+// Set visibility of the heads up display.
 public SetHUDVisibility(client, bool:bSetVisible) {
     SetVariantBool(bSetVisible);
     AcceptEntityInput(client, "SetHUDVisibility");
     
     g_bHUDVisible[client] = bSetVisible;
 }
+
+public Action:UnsetHUDToggleDelay(Handle:timer, any:client) {
+    g_bRecentlySetToggleHUD[client] = false;
+}
 #endif
- 
+
+/**
+ * Reloads the list of props.
+ */
 public Action:Command_ReloadPropList(client, args) {
     if (!g_bPluginEnabled) {
         return Plugin_Handled;
@@ -644,7 +641,9 @@ public Action:Command_ReloadPropList(client, args) {
     return Plugin_Handled;
 }
 
-// Credit for SMC Parser related code goes to Antithasys!
+/**
+ * Configuration file work.  "Credit for SMC Parser related code goes to Antithasys!"
+ */
 ProcessConfigFile() {
     // Create arrays if they are nonexistent.
     if (g_hModelNames == INVALID_HANDLE) {
@@ -726,7 +725,7 @@ ReadPropConfigurationFile(const String:fileName[]) {
             }
         }
     } else {
-        LogMessage("Could not find proplist %s.", sPropFileFullPath);
+        LogMessage("Could not find proplist %s.", fileName);
     }
 }
 
@@ -763,6 +762,7 @@ public SMCResult:Config_KeyValue(Handle:parser, const String:key[], const String
             // Custom spawn positions for spawning dead players.
         }
         default: {
+            // Do not read anything.
         }
     }
     return SMCParse_Continue;
