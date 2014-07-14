@@ -17,11 +17,16 @@
 #include <sourcemod>
 #include <tf2_stocks>
 #undef REQUIRE_PLUGIN
-#include <adminmenu>
+#include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
+#include <tf2attributes>                    // Optional for a different method of removing particle effects.
+                                            // https://forums.alliedmods.net/showthread.php?t=210221
 
-#define PLUGIN_VERSION          "2.3.0"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.4.0"     // Plugin version.  Am I doing semantic versioning right?
 
 // #def TEST_TOGGLEHUD          1           // Test feature to toggle the HUD while propped.
+
+#define RGBA_INVIS				{255,255,255,0}     // RGBA value for completely invisible.
+#define RGBA_NORMAL				{255,255,255,255}   // RGBA value for plainly visible.    
 
 #define PROP_COMMAND            "sm_prop"   // Default prop command name.
 #define PROP_NO_CUSTOM_SPEED    0           // Special value of sm_propbonus_forcespeed that disables the speed override.
@@ -63,6 +68,9 @@ new bool:g_bIsProp[MAXPLAYERS+1],
     bool:g_bIsPropLocked[MAXPLAYERS+1], bool:g_bRecentlySetPropLock[MAXPLAYERS+1],
     bool:g_bIsInThirdPerson[MAXPLAYERS+1], bool:g_bRecentlySetThirdPerson[MAXPLAYERS+1];
 
+// Boolean flag to determine if we can remove unusual effects through the TF2Attributes library.
+new bool:g_bAttributesAvailable = false;
+
 #if defined TEST_TOGGLEHUD
 new bool:g_bHUDVisible[MAXPLAYERS+1] = { true, ... }, bool:g_bRecentlySetToggleHUD[MAXPLAYERS+1];
 #endif
@@ -98,6 +106,8 @@ public OnPluginStart() {
     if (LibraryExists("adminmenu") && ((topmenu = GetAdminTopMenu()) != INVALID_HANDLE)) {
         OnAdminMenuReady(topmenu);
     }
+    
+    g_bAttributesAvailable = LibraryExists("tf2attributes");
     
     AutoExecConfig(true, "plugin.propify");
 }
@@ -200,9 +210,12 @@ public Hook_PreRoundWin(Handle:event, const String:name[], bool:dontBroadcast) {
 public Hook_PostPlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast) {
     new client = GetClientOfUserId(GetEventInt(event, "userid"));
     
+    #if defined TEST_TOGGLEHUD
+    SetHUDVisibility(client, true);
+    #endif
+    
     // If they switched classes or something, unprop them for now.
     // TODO Fix?
-    SetHUDVisibility(client, true);
     UnpropPlayer(client, true);
 }
 
@@ -353,6 +366,9 @@ UnpropPlayer(client, bool:respawn = false) {
     // Reset viewmodel.
     SetEntProp(client, Prop_Send, "m_bDrawViewmodel", 1);
     
+    // Make wearables visible again, if possible.
+    SetWearableVisinility(client, true);
+    
     // If respawn is set, return their weapons.
     if (respawn) {
         // Store position, angle, and velocity before respawning.
@@ -399,14 +415,7 @@ HidePlayerItemsAndDoPropStuff(client) {
     // Hide viewmodels for cleanliness.  We don't have any weapons, so it's fine.
     SetEntProp(client, Prop_Send, "m_bDrawViewmodel", 0);
     
-    // Kill wearables so Unusual effects do not show.  No worries, they'll be remade on spawn.
-    KillClientOwnedEntity(client, "tf_wearable", "CTFWearable");
-    
-    // Remove canteens, too.  (Merged from PBR v1.5, Sillium.)
-    KillClientOwnedEntity(client, "tf_powerup_bottle", "CTFPowerupBottle");
-    
-    // And remove Demo shields.  Buggy sometimes, though.
-    KillClientOwnedEntity(client, "tf_wearable_demoshield", "CTFWearableDemoShield");
+    SetWearableVisinility(client, false);
     
     // Force prop speed.
     if (g_iPropSpeed != PROP_NO_CUSTOM_SPEED) {
@@ -414,11 +423,49 @@ HidePlayerItemsAndDoPropStuff(client) {
     }
 }
 
-KillClientOwnedEntity(client, const String:sEntityName[], const String:sServerEntityName[]) {
+/**
+ * Sets visibility on a specific set of wearables.
+ */
+SetWearableVisinility(client, bool:bVisible) {
+    // Set display on wearables.
+    // If hiding them, Unusual effects do not show.  No worries, they'll be remade on spawn if killed.
+    SetClientOwnedEntVisibility(client, "tf_wearable", "CTFWearable", bVisible);
+    
+    // Set display on canteens, too.  (Merged from PBR v1.5, Sillium.)
+    SetClientOwnedEntVisibility(client, "tf_powerup_bottle", "CTFPowerupBottle", bVisible);
+    
+    // Set display on Demo shields.  Buggy sometimes, though.
+    SetClientOwnedEntVisibility(client, "tf_wearable_demoshield", "CTFWearableDemoShield", bVisible);
+}
+
+/**
+ * Sets the visibility of a client-owned entity.
+ * NOTE: If TF2Attributes isn't available, this will kill the entity, breaking wearables for a period of time.
+ */
+SetClientOwnedEntVisibility(client, const String:sEntityName[], const String:sServerEntityName[], bool:bVisible) {
+    if (bVisible && !g_bAttributesAvailable) {
+        // There is no procedure of bringing back killed entities, so let's not waste our time.
+        return;
+    }
+
     new ent = -1;
     while((ent = FindEntityByClassname(ent, sEntityName)) != -1) {      
         if (GetEntDataEnt2(ent, FindSendPropOffs(sServerEntityName, "m_hOwnerEntity")) == client) {
-            AcceptEntityInput(ent, "Kill");
+            if (g_bAttributesAvailable) {
+                // Hide the model by making it invisible.
+                // If TF2Attributes is available, we can try removing a particle effect if it has one.
+                new color[4];
+                color = bVisible ? RGBA_NORMAL : RGBA_INVIS;
+                SetEntityRenderMode(ent, RENDER_TRANSCOLOR);
+                SetEntityRenderColor(ent, color[0], color[1], color[2], color[3]);
+                
+                if (!bVisible && GetEntSendPropOffs(ent, "m_AttributeList") > 0) {
+                    TF2Attrib_RemoveByName(ent, "attach particle effect static");
+                }
+            } else if (!bVisible) {
+                // Waste no time in hiding the model by killing the entity entirely if hiding it.
+                AcceptEntityInput(ent, "Kill");
+            }
         }
     }
 }

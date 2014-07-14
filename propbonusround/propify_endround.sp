@@ -17,10 +17,8 @@
 #include <sourcemod>
 #include <tf2_stocks>
 #include <propify>
-#undef REQUIRE_PLUGIN
-#include <adminmenu>
 
-#define PLUGIN_VERSION          "2.1.8"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.1.9"     // Plugin version.  Am I doing semantic versioning right?
 
                                             // In humiliation...
 #define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
