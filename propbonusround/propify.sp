@@ -20,11 +20,11 @@
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 #include <tf2attributes>                    // Optional for a different method of removing particle effects.
 
-#define PLUGIN_VERSION          "2.4.1"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.4.2"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
-// #def KILLENT_IF_UNHIDABLE    1           // Kill the entity if TF2Attributes can't be used to hide particle effects.  See [KILLENT_IF_UNHIDABLE].
+#define KILLENT_IF_UNHIDABLE    1           // Kill the entity if TF2Attributes can't be used to hide particle effects.  See [KILLENT_IF_UNHIDABLE].
 
 #define ALPHA_INVIS             0           // Alpha value for completely invisible.
 #define ALPHA_NORMAL            255         // Alpha value for plainly visible.    
@@ -429,7 +429,7 @@ HidePlayerItemsAndDoPropStuff(client) {
 SetWearableVisinility(client, bool:bVisible) {
     // Set display on wearables.
     // If hiding them, Unusual effects do not show.  No worries, they'll be remade on spawn if killed.
-    SetClientOwnedEntVisibility(client, "tf_wearable", "CTFWearable", bVisible);
+    SetClientOwnedEntVisibility(client, "tf_wearable", "CTFWearable", bVisible, true);
     
     // Set display on canteens, too.  (Merged from PBR v1.5, Sillium.)
     SetClientOwnedEntVisibility(client, "tf_powerup_bottle", "CTFPowerupBottle", bVisible);
@@ -442,13 +442,19 @@ SetWearableVisinility(client, bool:bVisible) {
  * Sets the visibility of a client-owned entity.
  * NOTE: If [KILLENT_IF_UNHIDABLE] is defined and TF2Attributes is unavailable, this will kill the entity, breaking wearables for a period of time.
  * If we don't kill the entity, Unusual particle effects will still show.
+ *
+ * @param client            The client whose child entity needs removing.
+ * @param sEntityName       The class name of the item?  Client-side.
+ * @param sServerEntityName The class name of the item, server-side.
+ * @param bVisible          If the item should be made visible or invisible.
+ * @param bKillIfUnhidable  Kills the entity if it needs to be hidden, the flag is defined, and TF2Attributes isn't available to hide applicable particle effects.
  */
-SetClientOwnedEntVisibility(client, const String:sEntityName[], const String:sServerEntityName[], bool:bVisible) {
+SetClientOwnedEntVisibility(client, const String:sEntityName[], const String:sServerEntityName[], bool:bVisible, bool:bKillIfUnhidable = false) {
     new ent = -1;
     while((ent = FindEntityByClassname(ent, sEntityName)) != -1) {      
         if (GetEntDataEnt2(ent, FindSendPropOffs(sServerEntityName, "m_hOwnerEntity")) == client) {
             #if defined KILLENT_IF_UNHIDABLE
-            if (!bVisible && !g_bAttributesAvailable) {
+            if (!bVisible && !g_bAttributesAvailable && bKillIfUnhidable) {
                 AcceptEntityInput(ent, "Kill");
                 continue;
             }
