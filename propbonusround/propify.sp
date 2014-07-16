@@ -20,7 +20,7 @@
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 #include <tf2attributes>                    // Optional for a different method of removing particle effects.
 
-#define PLUGIN_VERSION          "2.4.2"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.4.3"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -323,7 +323,11 @@ PropPlayer(client, propIndex = PROP_RANDOM, bool:forceThirdPerson = true) {
         SetThirdPerson(client, true, g_bUseDirtyHackForThirdPerson);
     }
     HidePlayerItemsAndDoPropStuff(client);
-        
+    
+    // Prevent changing proplock settings for 0.25s so players do not lock themselves.
+    g_bRecentlySetPropLock[client] = true;
+    CreateTimer(0.25, UnsetPropLockToggleDelay, client);
+    
     return iModelIndex;
 }
 
