@@ -20,7 +20,7 @@
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 #include <tf2attributes>                    // Optional for a different method of removing particle effects.
 
-#define PLUGIN_VERSION          "2.4.3"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.4.4"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -80,10 +80,16 @@ new bool:g_bAttributesAvailable = false;
 new bool:g_bUseDirtyHackForThirdPerson;
 
 public OnPluginStart() {
-    CheckGame();
+    new String:strGame[10];
+    GetGameFolderName(strGame, sizeof(strGame));
+    
+    if(!StrEqual(strGame, "tf")) {
+        SetFailState("[propbonusround] Detected game other than [TF2], plugin disabled.");
+    }
+    
     LoadTranslations("common.phrases");
     
-    CreateConVar("sm_propify_version", PLUGIN_VERSION, "Version of Propify!", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_DONTRECORD);
+    CreateConVar("sm_propify_version", PLUGIN_VERSION, "Version of Propify!", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY);
     
     // Create and hook cvars.
     g_hCPluginEnabled = CreateConVar("sm_propify_enabled", "1", "Enable / disable the propify plugin.  Disabling the plugin unprops all propped players.");
@@ -107,8 +113,6 @@ public OnPluginStart() {
         OnAdminMenuReady(topmenu);
     }
     
-    g_bAttributesAvailable = LibraryExists("tf2attributes");
-    
     AutoExecConfig(true, "plugin.propify");
 }
 
@@ -119,6 +123,10 @@ public APLRes:AskPluginLoad2(Handle:hMySelf, bool:bLate, String:strError[], iMax
     CreateNative("IsClientProp", Native_IsClientProp);
 
     return APLRes_Success;
+}
+
+public OnAllPluginsLoaded() {
+    g_bAttributesAvailable = LibraryExists("tf2attributes");
 }
 
 HookPropifyPluginEvents(bool:bHook) {
@@ -471,6 +479,7 @@ SetClientOwnedEntVisibility(client, const String:sEntityName[], const String:sSe
             // If TF2Attributes is available, we can try removing a particle effect if it has one.
             if (g_bAttributesAvailable && !bVisible && GetEntSendPropOffs(ent, "m_AttributeList") > 0) {
                 TF2Attrib_RemoveByName(ent, "attach particle effect static");
+                TF2Attrib_RemoveByName(ent, "attach particle effect");
             }
         }
     }
@@ -788,12 +797,50 @@ public Config_End(Handle:parser, bool:halted, bool:failed) {
     }
 }
 
+SetupDefaultProplistFile(const String:sConfigPath[]) {
+    new Handle:hKVBuildProplist = CreateKeyValues("propbonusround");
+
+    KvJumpToKey(hKVBuildProplist, "proplist", true);
+    KvSetString(hKVBuildProplist, "Dynamite Crate", "models/props_2fort/miningcrate001.mdl");
+    KvSetString(hKVBuildProplist, "Metal Bucket", "models/props_2fort/metalbucket001.mdl");
+    KvSetString(hKVBuildProplist, "Milk Jug", "models/props_2fort/milkjug001.mdl");
+    KvSetString(hKVBuildProplist, "Mop and Bucket", "models/props_2fort/mop_and_bucket.mdl");
+    KvSetString(hKVBuildProplist, "Cow Cutout", "models/props_2fort/cow001_reference.mdl");
+    KvSetString(hKVBuildProplist, "Wood Pallet", "models/props_farm/pallet001.mdl");
+    KvSetString(hKVBuildProplist, "Hay Patch", "models/props_farm/haypile001.mdl");
+    KvSetString(hKVBuildProplist, "Grain Sack", "models/props_granary/grain_sack.mdl");
+    KvSetString(hKVBuildProplist, "Skull Sign", "models/props_mining/sign001.mdl");
+    KvSetString(hKVBuildProplist, "Terminal Chair", "models/props_spytech/terminal_chair.mdl");
+
+    KvRewind(hKVBuildProplist);            
+    KeyValuesToFile(hKVBuildProplist, sConfigPath);
+    
+    //Phew...glad thats over with.
+    CloseHandle(hKVBuildProplist);
+}
+
+/**
+ * Library stuff.
+ */
 public OnLibraryRemoved(const String:name[]) {
     if (StrEqual(name, "adminmenu")) {
         hAdminMenu = INVALID_HANDLE;
     }
+    
+    if (StrEqual(name, "tf2attributes")) {
+        g_bAttributesAvailable = false;
+    }
 }
 
+public OnLibraryAdded(const String:name[]) {
+    if (StrEqual(name, "tf2attributes")) {
+        g_bAttributesAvailable = true;
+    }
+}
+
+/**
+ * Admin menu handling.
+ */
 public OnAdminMenuReady(Handle:topmenu) {
     if (topmenu == hAdminMenu) {
         return;
@@ -858,40 +905,9 @@ public MenuHandler_Players(Handle:menu, MenuAction:action, param1, param2) {
     }
 }
 
-SetupDefaultProplistFile(const String:sConfigPath[]) {
-    new Handle:hKVBuildProplist = CreateKeyValues("propbonusround");
-
-    KvJumpToKey(hKVBuildProplist, "proplist", true);
-    KvSetString(hKVBuildProplist, "Dynamite Crate", "models/props_2fort/miningcrate001.mdl");
-    KvSetString(hKVBuildProplist, "Metal Bucket", "models/props_2fort/metalbucket001.mdl");
-    KvSetString(hKVBuildProplist, "Milk Jug", "models/props_2fort/milkjug001.mdl");
-    KvSetString(hKVBuildProplist, "Mop and Bucket", "models/props_2fort/mop_and_bucket.mdl");
-    KvSetString(hKVBuildProplist, "Cow Cutout", "models/props_2fort/cow001_reference.mdl");
-    KvSetString(hKVBuildProplist, "Wood Pallet", "models/props_farm/pallet001.mdl");
-    KvSetString(hKVBuildProplist, "Hay Patch", "models/props_farm/haypile001.mdl");
-    KvSetString(hKVBuildProplist, "Grain Sack", "models/props_granary/grain_sack.mdl");
-    KvSetString(hKVBuildProplist, "Skull Sign", "models/props_mining/sign001.mdl");
-    KvSetString(hKVBuildProplist, "Terminal Chair", "models/props_spytech/terminal_chair.mdl");
-
-    KvRewind(hKVBuildProplist);            
-    KeyValuesToFile(hKVBuildProplist, sConfigPath);
-    
-    //Phew...glad thats over with.
-    CloseHandle(hKVBuildProplist);
-}
-
 StripWeapons(client) {
     if(IsClientInGame(client) && IsPlayerAlive(client)) {
         TF2_RemoveAllWeapons(client);
-    }
-}
-
-CheckGame() {
-    new String:strGame[10];
-    GetGameFolderName(strGame, sizeof(strGame));
-    
-    if(!StrEqual(strGame, "tf")) {
-        SetFailState("[propbonusround] Detected game other than [TF2], plugin disabled.");
     }
 }
 
