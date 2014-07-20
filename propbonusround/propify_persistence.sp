@@ -7,7 +7,7 @@
 #include <sourcemod>
 #include <propify>
 
-#define PLUGIN_VERSION          "0.1.0"     // Plugin version.
+#define PLUGIN_VERSION          "0.1.1"     // Plugin version.
 #define PROP_RANDOM_TOGGLE      -2          // Value to turn a player into a random prop or to turn them out of a prop.
 
 public Plugin:myinfo = {
@@ -72,7 +72,7 @@ PerformPropPlayer(client, target, propIndex = PROP_RANDOM_TOGGLE) {
     
     // If not a prop or we are forcing a prop by using a value >= PROP_RANDOM...
     if(IsClientProp(target) || propIndex >= PROP_RANDOM) {
-        propIndex = PropPlayer(target, propIndex) == 1 ? propIndex : -1;
+        propIndex = PropPlayer(target, propIndex) > -1 ? propIndex : -1;
     } else {
         UnpropPlayer(target, true);
         propIndex = -1;
