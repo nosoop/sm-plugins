@@ -277,13 +277,27 @@ public Action:Command_Propplayer(client, args) {
         return Plugin_Handled;
     }
     
+    new iModelCount = GetArraySize(g_hModelNames) - 1;
+    if (propIndex > iModelCount) {
+        ReplyToCommand(client, "[SM] Failed to prop %s: prop index must be between -1 (random prop) and %d.", target_name, iModelCount);
+        return Plugin_Handled;
+    }
+    
     for(new i = 0; i < target_count; i++) {
         if (IsClientInGame(target_list[i]) && IsPlayerAlive(target_list[i])) {
             PerformPropPlayer(client, target_list[i], propIndex);
         }
     }
     
-    ShowActivity2(client, "[SM] ", "Toggled prop on %s.", target_name);
+    if (propIndex > PROP_RANDOM) {
+        ShowActivity2(client, "[SM] ", "Forced prop %d on %s.", propIndex, target_name);
+    } else if (propIndex == PROP_RANDOM) {
+        ShowActivity2(client, "[SM] ", "Forced random prop on %s.", target_name);
+    } else if (propIndex == PROP_RANDOM_TOGGLE) {
+        ShowActivity2(client, "[SM] ", "Toggled random prop on %s.", target_name);
+    } else {
+        ShowActivity2(client, "[SM] ", "Disabled prop on %s.", target_name);
+    }
     
     return Plugin_Handled;
 }
