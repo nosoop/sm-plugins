@@ -84,8 +84,6 @@ new String:mapTag[32];
 
 // Particles
 new String:mapParticle[64];
-new Float:mapParticleHeight;
-
 
 // Map Region
 new bool:mapEstimateRegion;
@@ -211,7 +209,7 @@ InitConfig()
 		mapX2[i] = 0.0;
 		mapY1[i] = 0.0;
 		mapY2[i] = 0.0;
-		mapZ[i] = 1024.0;
+		mapZ[i] = 1536.0;
 	}
 }
 
@@ -238,22 +236,6 @@ CacheParticleFile() {
 HandleParticleFiles()
 {
 	decl String:file[96];
-	
-	Format(file, sizeof(file), "particles/themes_collidingrain.pcf");
-	
-    AddFileToDownloadsTable(file);
-    LogMessage("Rain particles queued for download.");
-    
-    PrecacheGeneric("particles/themes_collidingrain.pcf", true);
-    PrecacheParticleSystem("env_rain_001_collision");
-    PrecacheParticleSystem("themes_collidingrain");
-    
-    Format(file, sizeof(file), "particles/water.pcf");
-	
-    AddFileToDownloadsTable(file);
-    LogMessage("Default hackish rain particles queued for download.");
-    
-    PrecacheGeneric("particles/water.pcf", true);
 }
 
 stock PrecacheParticleSystem( const String:p_strEffectName[] )
@@ -334,7 +316,31 @@ CreateParticles()
                 
                 pos[0] = mapX1[currentStage] + x*1024.0 + 512.0 - ox;
                 pos[1] = mapY1[currentStage] + y*1024.0 + 512.0 - oy;
-                pos[2] = mapParticleHeight + mapZ[currentStage];
+                pos[2] = mapZ[currentStage];
+                
+                /**
+                 * Quick hack for weather:  Attempt to trace downwards from the emitter spawn
+                 * so the particle spawns as high up as possible so it ends at the first solid object.
+                 */
+                decl Float:vOrigin[3], Float:vDest[3];
+                vOrigin[0] = pos[0];
+                vOrigin[1] = pos[1];
+                vOrigin[2] = 1600.0;    // Base location to scan.  TODO Do-while until we can't find any higher ground.
+                vDest[0] = pos[0];
+                vDest[1] = pos[1];
+                vDest[2] = -2400.0;     // Ending location to scan for.
+                
+                // Begin tracing.
+                new Handle:trace = TR_TraceRayEx(vOrigin, vDest, MASK_PLAYERSOLID_BRUSHONLY, RayType_EndPoint);
+                if (TR_DidHit(trace)) {
+                    decl Float:vEndPosition[3];
+                    TR_GetEndPosition(vEndPosition, trace);
+                    
+                    pos[2] = vEndPosition[2] + 2800; // offset for particle height
+                    PrintToServer("Surface found: %f", pos[2]);
+                }
+                CloseHandle(trace);
+                
                 
                 // Teleport, set up
                 TeleportEntity(particle, pos, NULL_VECTOR, NULL_VECTOR);
@@ -342,12 +348,8 @@ CreateParticles()
                 DispatchKeyValue(particle, "targetname", "themes_particle");
                 
                 // Patch in weather flag
-                SetEntProp(particle, Prop_Data, "m_bWeatherEffect", 1);
+                //SetEntProp(particle, Prop_Data, "m_bWeatherEffect", 1);
                 DispatchKeyValue(particle, "flag_as_weather", "1");
-                
-                // Patch in solid? flag
-                //SetEntProp(particle, Prop_Data, "m_nSolidType", 1);
-                DispatchKeyValue(particle, "solid", "1");
                 
                 // Spawn and start
                 DispatchSpawn(particle);
