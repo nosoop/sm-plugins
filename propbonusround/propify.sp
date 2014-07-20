@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "2.4.7"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.5.0"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -84,6 +84,12 @@ new String:g_saHidableClasses[][] = {
 };
 new g_nClassesToForceHide = 1;          // The first n entities will be forced hidden by killing them.
 
+// Global forward to notify about propped clients.
+new Handle:g_hForwardOnPropified;
+
+// Global forward to notify about a reloaded model list.
+new Handle:g_hForwardOnPropListLoaded;
+
 public OnPluginStart() {
     new String:strGame[10];
     GetGameFolderName(strGame, sizeof(strGame));
@@ -112,6 +118,10 @@ public OnPluginStart() {
     // Hook round events to set and unset props.
     HookPropifyPluginEvents(true);
     
+    // Create forwards.
+    g_hForwardOnPropified = CreateGlobalForward("OnPropified", ET_Ignore, Param_Cell, Param_Cell);
+    g_hForwardOnPropListLoaded = CreateGlobalForward("OnPropListLoaded", ET_Ignore);
+    
     AutoExecConfig(true, "plugin.propify");
 }
 
@@ -120,6 +130,7 @@ public APLRes:AskPluginLoad2(Handle:hMySelf, bool:bLate, String:strError[], iMax
     CreateNative("PropPlayer", Native_PropPlayer);
     CreateNative("UnpropPlayer", Native_UnpropPlayer);
     CreateNative("IsClientProp", Native_IsClientProp);
+    CreateNative("AddModelData", Native_AddModelData);
 
     return APLRes_Success;
 }
@@ -334,24 +345,27 @@ PropPlayer(client, propIndex = PROP_RANDOM, bool:forceThirdPerson = true) {
     PrintToChat(client,"\x01You are disguised as a \x04%s\x01!", sName);
 
     // If the client was already a prop, the model change is all that needs to be done.
-    if (g_bIsProp[client]) {
-        return iModelIndex;
+    if (!g_bIsProp[client]) {
+        g_bIsProp[client] = true;
+        
+        SetVariantInt(1);
+        AcceptEntityInput(client, "SetCustomModelRotates");
+        
+        // Set client to third-person and strip weapons and force speed override if desired.
+        if (forceThirdPerson) {
+            SetThirdPerson(client, true, g_bUseDirtyHackForThirdPerson);
+        }
+        HidePlayerItemsAndDoPropStuff(client);
+        
+        // Prevent changing proplock settings for 0.25s so players do not lock themselves.
+        g_bRecentlySetPropLock[client] = true;
+        CreateTimer(0.25, UnsetPropLockToggleDelay, client);
     }
     
-    g_bIsProp[client] = true;
-    
-    SetVariantInt(1);
-    AcceptEntityInput(client, "SetCustomModelRotates");
-    
-    // Set client to third-person and strip weapons and force speed override if desired.
-    if (forceThirdPerson) {
-        SetThirdPerson(client, true, g_bUseDirtyHackForThirdPerson);
-    }
-    HidePlayerItemsAndDoPropStuff(client);
-    
-    // Prevent changing proplock settings for 0.25s so players do not lock themselves.
-    g_bRecentlySetPropLock[client] = true;
-    CreateTimer(0.25, UnsetPropLockToggleDelay, client);
+    Call_StartForward(g_hForwardOnPropified);
+    Call_PushCell(client);
+    Call_PushCell(iModelIndex);
+    Call_Finish();
     
     return iModelIndex;
 }
@@ -420,6 +434,11 @@ UnpropPlayer(client, bool:respawn = false) {
         SetEntityHealth(client, iHealth);
         TeleportEntity(client, origin, angle, velocity);
     }
+    
+    Call_StartForward(g_hForwardOnPropified);
+    Call_PushCell(client);
+    Call_PushCell(-1);
+    Call_Finish();
 }
 
 // Exposed UnpropPlayer method.
@@ -438,7 +457,7 @@ public Native_UnpropPlayer(Handle:plugin, numParams) {
 // Very descriptive, isn't it.  Things to do to a prop that has their items.
 HidePlayerItemsAndDoPropStuff(client) {
     // Strip weapons from propped player and hide Demoman eyeglow.
-    StripWeapons(client);
+    TF2_RemoveAllWeapons(client);
     TF2_RemoveCondition(client, TFCond_DemoBuff);
     
     // Hide viewmodels for cleanliness.  We don't have any weapons, so it's fine.
@@ -463,7 +482,7 @@ SetWearableVisinility(client, bool:bVisible) {
 
 /**
  * Sets the visibility of a client-owned entity.
- * NOTE: If [KILLENT_IF_UNHIDABLE] is defined and TF2Attributes is unavailable, this will kill the entity, breaking wearables for a period of time.
+ * NOTE: If [KILLENT_IF_UNHIDABLE] is defined, this may kill the entity, breaking wearables for a period of time.
  * If we don't kill the entity, Unusual particle effects will still show.
  *
  * @param client            The client whose child entity needs removing.
@@ -564,7 +583,9 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
     return Plugin_Continue;
 }
 
-// Sets prop locked state on a client.
+/**
+ * Sets "proplocked" state.
+ */
 SetPropLockState(client, bool:bPropLocked) {
     if (!g_bIsProp[client])
         return;
@@ -599,7 +620,9 @@ public Action:UnsetPropLockToggleDelay(Handle:timer, any:client) {
     g_bRecentlySetPropLock[client] = false;
 }
 
-// Sets third-person mode.  
+/**
+ * Sets third-person mode.
+ */
 SetThirdPerson(client, bool:bEnabled, bool:bUseDirtyHack = false) {
     if (!g_bIsProp[client]) {
         return;
@@ -701,6 +724,9 @@ ProcessConfigFile() {
     }
     
     ClearArray(g_hIncludePropLists);
+    
+    Call_StartForward(g_hForwardOnPropListLoaded);
+    Call_Finish();
 }
 
 ReadPropConfigurationFile(const String:fileName[]) {
@@ -771,8 +797,7 @@ public SMCResult:Config_KeyValue(Handle:parser, const String:key[], const String
     switch(g_iPropListSection) {
         case PROPLIST_PROPS: {
             // Currently in the prop list section.  Add to appropriate prop arrays.
-            PushArrayString(g_hModelNames, key);
-            PushArrayString(g_hModelPaths, value);
+            AddModelData(key, value);
         }
         case PROPLIST_INCLUDELIST: {
             // Read any values that aren't already in the external prop list array.
@@ -821,6 +846,23 @@ SetupDefaultProplistFile(const String:sConfigPath[]) {
     
     //Phew...glad thats over with.
     CloseHandle(hKVBuildProplist);
+}
+
+/**
+ * Methods to add new props.
+ */
+AddModelData(const String:modelName[], const String:modelPath[]) {
+    PushArrayString(g_hModelNames, modelName);
+    PushArrayString(g_hModelPaths, modelPath);
+}
+
+public Native_AddModelData(Handle:plugin, numParams) {
+    decl String:modelName[PROPNAME_LENGTH], String:modelPath[PLATFORM_MAX_PATH];
+    
+    GetNativeString(1, modelName, sizeof(modelName));
+    GetNativeString(2, modelPath, sizeof(modelPath));
+    
+    AddModelData(modelName, modelPath);
 }
 
 /**
@@ -907,12 +949,9 @@ public MenuHandler_Players(Handle:menu, MenuAction:action, param1, param2) {
     }
 }
 
-StripWeapons(client) {
-    if(IsClientInGame(client) && IsPlayerAlive(client)) {
-        TF2_RemoveAllWeapons(client);
-    }
-}
-
+/**
+ * Method that checks for convar changes.
+ */
 public Cvars_Changed(Handle:convar, const String:oldValue[], const String:newValue[]) {
     if(convar == g_hCPluginEnabled) {
         g_bPluginEnabled = StringToInt(newValue) != 0;

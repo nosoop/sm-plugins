@@ -27,6 +27,23 @@ public __pl_propify_SetNTVOptional() {
 }
 
 /**
+ * Called when a client is turned into a (possibly different) prop, or when they are unpropped.
+ *
+ * @param client            Client index.
+ * @param propIndex         The prop the client was turned into, or -1 if not propped.
+ * @noreturn
+ */
+forward OnPropified(client, propIndex);
+
+/**
+ * Called when the prop list has been cleared and populated.  Other plugins can start adding new props or readding.
+ *
+ * @noreturn
+ */
+forward OnPropListLoaded();
+
+
+/**
  * Attempts to set a prop on a player.
  *
  * @param client            Client index.
@@ -54,3 +71,11 @@ native bool:UnpropPlayer(client, bool:respawn = false);
  * @return              Boolean noting whether or not the client is a prop.
  */
 native bool:IsClientProp(client);
+
+/**
+ * Adds a model to the model list.
+ * 
+ * @param modelName     The visible name of the model.
+ * @param modelPath     The path to the model file, starting with the models subdirectory.
+ */
+native AddModelData(const String:modelName[], const String:modelPath[]);
