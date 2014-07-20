@@ -19,11 +19,11 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "2.4.6"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.4.7"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
-#define KILLENT_IF_UNHIDABLE    1           // Kill the entity if TF2Attributes can't be used to hide particle effects.  See [KILLENT_IF_UNHIDABLE].
+#define KILLENT_IF_UNHIDABLE    1           // Kill the entity if it is of a class that may emit particle effects.  See [KILLENT_IF_UNHIDABLE].
 
 #define ALPHA_INVIS             0           // Alpha value for completely invisible.
 #define ALPHA_NORMAL            255         // Alpha value for plainly visible.    
@@ -455,14 +455,14 @@ SetWearableVisinility(client, bool:bVisible) {
  * @param client            The client whose child entity needs removing.
  * @param sEntityName       The class name of the item?  Client-side.
  * @param bVisible          If the item should be made visible or invisible.
- * @param bKillIfUnhidable  Kills the entity if it needs to be hidden, the flag is defined, and TF2Attributes isn't available to hide applicable particle effects.
+ * @param bKillIfUnhidable  Kills the entity if it needs to be hidden and the compile flag is defined.
  */
 SetClientOwnedEntVisibility(client, const String:sEntityName[], bool:bVisible, bool:bKillIfUnhidable = false) {
     new ent = -1;
     while((ent = FindEntityByClassname(ent, sEntityName)) != -1) {      
         if (GetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity") == client) {
             #if defined KILLENT_IF_UNHIDABLE
-            if (!bVisible && bKillIfUnhidable && GetEntSendPropOffs(ent, "m_AttributeList") > 0) {
+            if (!bVisible && bKillIfUnhidable) {
                 AcceptEntityInput(ent, "Kill");
                 continue;
             }
