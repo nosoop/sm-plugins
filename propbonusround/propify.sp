@@ -18,9 +18,8 @@
 #include <tf2_stocks>
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
-#include <tf2attributes>                    // Optional for a different method of removing particle effects.
 
-#define PLUGIN_VERSION          "2.4.4"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.4.5"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -70,14 +69,19 @@ new bool:g_bIsProp[MAXPLAYERS+1],
 new bool:g_bHUDVisible[MAXPLAYERS+1] = { true, ... }, bool:g_bRecentlySetToggleHUD[MAXPLAYERS+1];
 #endif
 
-// Boolean to determine if we can remove particle effects through the TF2Attributes library.
-new bool:g_bAttributesAvailable = false;
-
 /**
  * Sets whether or not we use the hackish method of setting third-person mode.
  * We need this for props that toggle views during endround.
  */
 new bool:g_bUseDirtyHackForThirdPerson;
+
+// List of hidable entity classes.
+new String:g_saHidableClasses[][] = {
+    "tf_wearable",                      // Wearables.  Forced to hide.
+    "tf_powerup_bottle",                // Canteens.  (Merged from PBR v1.5, Sillium.)
+    "tf_wearable_demoshield"            // Demo shields.
+};
+new g_nClassesToForceHide = 1;          // The first n entities will be forced hidden by killing them.
 
 public OnPluginStart() {
     new String:strGame[10];
@@ -106,12 +110,6 @@ public OnPluginStart() {
         
     // Hook round events to set and unset props.
     HookPropifyPluginEvents(true);
-
-    // Attach player prop option to menu.
-    new Handle:topmenu;
-    if (LibraryExists("adminmenu") && ((topmenu = GetAdminTopMenu()) != INVALID_HANDLE)) {
-        OnAdminMenuReady(topmenu);
-    }
     
     AutoExecConfig(true, "plugin.propify");
 }
@@ -126,7 +124,11 @@ public APLRes:AskPluginLoad2(Handle:hMySelf, bool:bLate, String:strError[], iMax
 }
 
 public OnAllPluginsLoaded() {
-    g_bAttributesAvailable = LibraryExists("tf2attributes");
+    // Attach player prop option to menu.
+    new Handle:topmenu;
+    if (LibraryExists("adminmenu") && ((topmenu = GetAdminTopMenu()) != INVALID_HANDLE)) {
+        OnAdminMenuReady(topmenu);
+    }
 }
 
 HookPropifyPluginEvents(bool:bHook) {
@@ -439,15 +441,9 @@ HidePlayerItemsAndDoPropStuff(client) {
  * Sets visibility on a specific set of wearables.
  */
 SetWearableVisinility(client, bool:bVisible) {
-    // Set display on wearables.
-    // If hiding them, Unusual effects do not show.  No worries, they'll be remade on spawn if killed.
-    SetClientOwnedEntVisibility(client, "tf_wearable", "CTFWearable", bVisible, true);
-    
-    // Set display on canteens, too.  (Merged from PBR v1.5, Sillium.)
-    SetClientOwnedEntVisibility(client, "tf_powerup_bottle", "CTFPowerupBottle", bVisible);
-    
-    // Set display on Demo shields.  Buggy sometimes, though.
-    SetClientOwnedEntVisibility(client, "tf_wearable_demoshield", "CTFWearableDemoShield", bVisible);
+    for (new i = 0; i < sizeof(g_saHidableClasses); i++) {
+        SetClientOwnedEntVisibility(client, g_saHidableClasses[i], bVisible, i < g_nClassesToForceHide);
+    }
 }
 
 /**
@@ -457,16 +453,15 @@ SetWearableVisinility(client, bool:bVisible) {
  *
  * @param client            The client whose child entity needs removing.
  * @param sEntityName       The class name of the item?  Client-side.
- * @param sServerEntityName The class name of the item, server-side.
  * @param bVisible          If the item should be made visible or invisible.
  * @param bKillIfUnhidable  Kills the entity if it needs to be hidden, the flag is defined, and TF2Attributes isn't available to hide applicable particle effects.
  */
-SetClientOwnedEntVisibility(client, const String:sEntityName[], const String:sServerEntityName[], bool:bVisible, bool:bKillIfUnhidable = false) {
+SetClientOwnedEntVisibility(client, const String:sEntityName[], bool:bVisible, bool:bKillIfUnhidable = false) {
     new ent = -1;
     while((ent = FindEntityByClassname(ent, sEntityName)) != -1) {      
-        if (GetEntDataEnt2(ent, FindSendPropOffs(sServerEntityName, "m_hOwnerEntity")) == client) {
+        if (GetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity") == client) {
             #if defined KILLENT_IF_UNHIDABLE
-            if (!bVisible && !g_bAttributesAvailable && bKillIfUnhidable) {
+            if (!bVisible && bKillIfUnhidable && GetEntSendPropOffs(ent, "m_AttributeList") > 0) {
                 AcceptEntityInput(ent, "Kill");
                 continue;
             }
@@ -475,12 +470,6 @@ SetClientOwnedEntVisibility(client, const String:sEntityName[], const String:sSe
             // Hide the model by making it invisible.
             SetEntityRenderMode(ent, RENDER_TRANSCOLOR);
             SetEntityRenderColor(ent, 255, 255, 255, bVisible ? ALPHA_NORMAL : ALPHA_INVIS);
-            
-            // If TF2Attributes is available, we can try removing a particle effect if it has one.
-            if (g_bAttributesAvailable && !bVisible && GetEntSendPropOffs(ent, "m_AttributeList") > 0) {
-                TF2Attrib_RemoveByName(ent, "attach particle effect static");
-                TF2Attrib_RemoveByName(ent, "attach particle effect");
-            }
         }
     }
 }
@@ -826,15 +815,13 @@ public OnLibraryRemoved(const String:name[]) {
     if (StrEqual(name, "adminmenu")) {
         hAdminMenu = INVALID_HANDLE;
     }
-    
-    if (StrEqual(name, "tf2attributes")) {
-        g_bAttributesAvailable = false;
-    }
 }
 
 public OnLibraryAdded(const String:name[]) {
-    if (StrEqual(name, "tf2attributes")) {
-        g_bAttributesAvailable = true;
+    // Attach player prop option to menu.
+    new Handle:topmenu;
+    if (StrEqual(name, "adminmenu") && ((topmenu = GetAdminTopMenu()) != INVALID_HANDLE)) {
+        OnAdminMenuReady(topmenu);
     }
 }
 
