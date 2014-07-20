@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "2.4.5"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.4.6"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -79,7 +79,8 @@ new bool:g_bUseDirtyHackForThirdPerson;
 new String:g_saHidableClasses[][] = {
     "tf_wearable",                      // Wearables.  Forced to hide.
     "tf_powerup_bottle",                // Canteens.  (Merged from PBR v1.5, Sillium.)
-    "tf_wearable_demoshield"            // Demo shields.
+    "tf_wearable_demoshield",           // Demo shields.
+    "tf_weapon_spellbook"               // Spellbooks.
 };
 new g_nClassesToForceHide = 1;          // The first n entities will be forced hidden by killing them.
 
