@@ -25,6 +25,8 @@ public __pl_propify_SetNTVOptional() {
     MarkNativeAsOptional("IsClientProp");
     MarkNativeAsOptional("SetThirdPersonOnProp");
     MarkNativeAsOptional("AddModelData");
+    MarkNativeAsOptional("RemoveModelData");
+    MarkNativeAsOptional("GetModelDataArrays");
 }
 
 /**
@@ -74,9 +76,25 @@ native bool:UnpropPlayer(client, bool:respawn = false);
 native bool:IsClientProp(client);
 
 /**
- * Adds a model to the model list.
+ * Adds a model to the prop list.
  * 
  * @param modelName     The visible name of the model.
  * @param modelPath     The path to the model file, starting with the models subdirectory.
  */
 native AddModelData(const String:modelName[], const String:modelPath[]);
+
+/**
+ * Removes a model from the prop list.
+ *
+ * @param nModelIndex   The index of the prop to remove.
+ */
+ native RemoveModelData(nModelIndex);
+
+/**
+ * Gets the handles for the model name and path arrays for raw access.
+ * Remember to sync changes between the arrays.
+ *
+ * @param hModelNames   The handle reference to store the model names array in.
+ * @param hModelPaths   The handle reference to store the model paths array in.
+ */
+native GetModelDataArrays(&Handle:hModelNames, &Handle:hModelPaths);

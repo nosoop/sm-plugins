@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "2.5.1"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.6.0"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -131,6 +131,8 @@ public APLRes:AskPluginLoad2(Handle:hMySelf, bool:bLate, String:strError[], iMax
     CreateNative("UnpropPlayer", Native_UnpropPlayer);
     CreateNative("IsClientProp", Native_IsClientProp);
     CreateNative("AddModelData", Native_AddModelData);
+    CreateNative("RemoveModelData", Native_RemoveModelData);
+    CreateNative("GetModelDataArrays", Native_GetModelDataArrays);
 
     return APLRes_Success;
 }
@@ -324,10 +326,12 @@ public Native_IsClientProp(Handle:plugin, numParams) {
  */
 PropPlayer(client, propIndex = PROP_RANDOM, bool:forceThirdPerson = true) {
     new iModelIndex;
+    
     // If the index is a negative number, we are picking a random prop.
     // Prop toggles and force-disabling props are special values for sm_prop, disregard here.
     if (propIndex <= PROP_RANDOM) {
         // GetRandomInt is inclusive, so last model index = size of array minus one.
+        // TODO Fail the entire thing if we have no props in the list.
         iModelIndex = GetRandomInt(0, GetArraySize(g_hModelNames) - 1);
     } else {
         iModelIndex = propIndex;
@@ -827,7 +831,7 @@ public Config_End(Handle:parser, bool:halted, bool:failed) {
 }
 
 /**
- * Creates a minimal base proplist file.
+ * Creates a minimal base proplist file.  This should probably be its own file.
  */
 SetupDefaultProplistFile(const String:sConfigPath[]) {
     new Handle:hKVBuildProplist = CreateKeyValues("propbonusround");
@@ -852,7 +856,7 @@ SetupDefaultProplistFile(const String:sConfigPath[]) {
 }
 
 /**
- * Methods to add new props and access .
+ * Methods to add and remove props from the prop list and provide access to the underlying arrays.
  */
 AddModelData(const String:modelName[], const String:modelPath[]) {
     PushArrayString(g_hModelNames, modelName);
@@ -866,6 +870,31 @@ public Native_AddModelData(Handle:plugin, numParams) {
     GetNativeString(2, modelPath, sizeof(modelPath));
     
     AddModelData(modelName, modelPath);
+}
+
+RemoveModelData(nModelIndex) {
+    RemoveFromArray(g_hModelNames, nModelIndex);
+    RemoveFromArray(g_hModelPaths, nModelIndex);
+}
+
+public Native_RemoveModelData(Handle:plugin, numParams) {
+    new nModelIndex = GetNativeCell(1);
+    
+    RemoveModelData(nModelIndex);
+}
+
+GetModelDataArrays(&Handle:hModelNames, &Handle:hModelPaths) {
+    hModelNames = g_hModelNames;
+    hModelPaths = g_hModelPaths;
+    return;
+}
+
+public Native_GetModelDataArrays(Handle:plugin, numParams) {
+    decl Handle:hModelNames, Handle:hModelPaths;
+    hModelNames = GetNativeCellRef(1);
+    hModelPaths = GetNativeCellRef(2);
+    
+    GetModelDataArrays(hModelNames, hModelPaths);
 }
 
 /**
