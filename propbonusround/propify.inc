@@ -24,6 +24,7 @@ public __pl_propify_SetNTVOptional() {
     MarkNativeAsOptional("UnropPlayer");
     MarkNativeAsOptional("IsClientProp");
     MarkNativeAsOptional("SetThirdPersonOnProp");
+    MarkNativeAsOptional("AddModelData");
 }
 
 /**

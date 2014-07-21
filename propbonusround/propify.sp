@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "2.5.0"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.5.1"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -826,6 +826,9 @@ public Config_End(Handle:parser, bool:halted, bool:failed) {
     }
 }
 
+/**
+ * Creates a minimal base proplist file.
+ */
 SetupDefaultProplistFile(const String:sConfigPath[]) {
     new Handle:hKVBuildProplist = CreateKeyValues("propbonusround");
 
@@ -849,7 +852,7 @@ SetupDefaultProplistFile(const String:sConfigPath[]) {
 }
 
 /**
- * Methods to add new props.
+ * Methods to add new props and access .
  */
 AddModelData(const String:modelName[], const String:modelPath[]) {
     PushArrayString(g_hModelNames, modelName);
