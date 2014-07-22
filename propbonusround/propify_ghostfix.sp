@@ -11,7 +11,7 @@
 #include <sdktools>
 #include <propify>
 
-#define PLUGIN_VERSION          "0.0.1"     // Plugin version.
+#define PLUGIN_VERSION          "0.0.2"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Propify! Ghost Fix",
@@ -21,7 +21,6 @@ public Plugin:myinfo = {
     url = "http://github.com/nosoop/sm-plugins"
 }
 
-new bool:g_bIsGhost[MAXPLAYERS+1];
 new Handle:g_hModelPaths = INVALID_HANDLE;
 
 new String:g_saGhostModels[][] = {
@@ -56,14 +55,11 @@ public OnPropified(client, propIndex) {
         }
     }
     
-    // If we were a ghost and we aren't now, kill off the glow particle effect.
-    if (!bIsGhostNow && g_bIsGhost[client]) {
+    // If we aren't a ghost now, kill off the glow particle effect.
+    if (!bIsGhostNow) {
         // Fix sourced from the Ghost Mode Redux plugin:
         // https://forums.alliedmods.net/showthread.php?p=1883875
         SetVariantString("ParticleEffectStop");
         AcceptEntityInput(client, "DispatchEffect");
     }
-    
-    // Update spooky status.
-    g_bIsGhost[client] = bIsGhostNow;
 }
