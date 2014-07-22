@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "2.6.0"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.6.1"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -132,7 +132,8 @@ public APLRes:AskPluginLoad2(Handle:hMySelf, bool:bLate, String:strError[], iMax
     CreateNative("IsClientProp", Native_IsClientProp);
     CreateNative("AddModelData", Native_AddModelData);
     CreateNative("RemoveModelData", Native_RemoveModelData);
-    CreateNative("GetModelDataArrays", Native_GetModelDataArrays);
+    CreateNative("GetModelNamesArray", Native_GetModelNamesArray);
+    CreateNative("GetModelPathsArray", Native_GetModelPathsArray);
 
     return APLRes_Success;
 }
@@ -883,19 +884,15 @@ public Native_RemoveModelData(Handle:plugin, numParams) {
     RemoveModelData(nModelIndex);
 }
 
-GetModelDataArrays(&Handle:hModelNames, &Handle:hModelPaths) {
-    hModelNames = g_hModelNames;
-    hModelPaths = g_hModelPaths;
-    return;
+public Native_GetModelNamesArray(Handle:plugin, numParams) {
+    // Strip the tag.  You should be expecting a handle value anyways.
+    return _:CloneHandle(Handle:g_hModelNames);
 }
 
-public Native_GetModelDataArrays(Handle:plugin, numParams) {
-    decl Handle:hModelNames, Handle:hModelPaths;
-    hModelNames = GetNativeCellRef(1);
-    hModelPaths = GetNativeCellRef(2);
-    
-    GetModelDataArrays(hModelNames, hModelPaths);
+public Native_GetModelPathsArray(Handle:plugin, numParams) {
+    return _:CloneHandle(Handle:g_hModelPaths);
 }
+
 
 /**
  * Library stuff.

@@ -45,7 +45,6 @@ forward OnPropified(client, propIndex);
  */
 forward OnPropListLoaded();
 
-
 /**
  * Attempts to set a prop on a player.
  *
@@ -92,9 +91,16 @@ native AddModelData(const String:modelName[], const String:modelPath[]);
 
 /**
  * Gets the handles for the model name and path arrays for raw access.
+ * Remember to sync additions and removals between the arrays.
+ *
+ * @return              A Handle pointing to an adt_array containing model names.
+ */
+native Handle:GetModelNamesArray();
+
+/**
+ * Gets the handles for the model name and path arrays for raw access.
  * Remember to sync changes between the arrays.
  *
- * @param hModelNames   The handle reference to store the model names array in.
- * @param hModelPaths   The handle reference to store the model paths array in.
+ * @return              A Handle pointing to an adt_array containing model paths.
  */
-native GetModelDataArrays(&Handle:hModelNames, &Handle:hModelPaths);
+native Handle:GetModelPathsArray();
