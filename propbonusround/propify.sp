@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "3.0.0"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "3.0.1"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -430,12 +430,9 @@ UnpropPlayer(client, bool:respawn = false) {
         // Store health to reset to on respawn.
         new iHealth = GetEntProp(client, Prop_Data, "m_iHealth");
         
-        // Also force them back to their current class.
-        // Can't do anything if they switch loadouts on the class while being a prop, but eh.
-        decl TFClassType:class;
-        class = TF2_GetPlayerClass(client);
-        TF2_SetPlayerClass(client, class);
-        TF2_RespawnPlayer(client);
+        // More efficent to regenerate player instead of respawning?
+        // Source:  https://forums.alliedmods.net/showthread.php?t=195380
+        TF2_RegeneratePlayer(client);
         
         // Return health and position.
         SetEntityHealth(client, iHealth);
