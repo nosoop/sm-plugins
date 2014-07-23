@@ -39,11 +39,29 @@ public __pl_propify_SetNTVOptional() {
 forward OnPropified(client, propIndex);
 
 /**
- * Called when the prop list has been cleared and populated.  Other plugins can start adding new props or readding.
+ * Called when the prop list has been cleared and populated.
+ * Other plugins can start adding new props or readding.
  *
  * @noreturn
  */
 forward OnPropListLoaded();
+
+/**
+ * Called when an external plugin has added a model to the list.
+ * This is not called when Propify! adds its own models to the list.
+ *
+ * @noreturn
+ */
+forward OnModelAdded(const String:sModelName[], const String:sModelPath[]);
+
+/**
+ * Called when an external plugin has removed a model from the list.
+ * This is not called when Propify! adds its own models to the list.
+ *
+ * @noreturn
+ */
+forward OnModelRemoved(const String:sModelName[], const String:sModelPath[]);
+
 
 /**
  * Attempts to set a prop on a player.

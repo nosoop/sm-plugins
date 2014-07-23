@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "2.6.1"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.7.0"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -84,11 +84,11 @@ new String:g_saHidableClasses[][] = {
 };
 new g_nClassesToForceHide = 1;          // The first n entities will be forced hidden by killing them.
 
-// Global forward to notify about propped clients.
-new Handle:g_hForwardOnPropified;
-
-// Global forward to notify about a reloaded model list.
-new Handle:g_hForwardOnPropListLoaded;
+// Global forwards.
+new Handle:g_hForwardOnPropified,       // Turned a player into a prop or out of one.
+    Handle:g_hForwardOnPropListLoaded,  // Cleared and reloaded model list.
+    Handle:g_hForwardOnModelAdded,      // External plugin added a prop.
+    Handle:g_hForwardOnModelRemoved;    // External plugin removed a prop.
 
 public OnPluginStart() {
     new String:strGame[10];
@@ -121,6 +121,8 @@ public OnPluginStart() {
     // Create forwards.
     g_hForwardOnPropified = CreateGlobalForward("OnPropified", ET_Ignore, Param_Cell, Param_Cell);
     g_hForwardOnPropListLoaded = CreateGlobalForward("OnPropListLoaded", ET_Ignore);
+    g_hForwardOnModelAdded = CreateGlobalForward("OnModelAdded", ET_Ignore, Param_String, Param_String);
+    g_hForwardOnModelRemoved = CreateGlobalForward("OnModelRemoved", ET_Ignore, Param_String, Param_String);
     
     AutoExecConfig(true, "plugin.propify");
 }
@@ -871,6 +873,11 @@ public Native_AddModelData(Handle:plugin, numParams) {
     GetNativeString(2, modelPath, sizeof(modelPath));
     
     AddModelData(modelName, modelPath);
+    
+    Call_StartForward(g_hForwardOnModelAdded);
+    Call_PushString(modelName);
+    Call_PushString(modelPath);
+    Call_Finish();
 }
 
 RemoveModelData(nModelIndex) {
@@ -880,7 +887,17 @@ RemoveModelData(nModelIndex) {
 
 public Native_RemoveModelData(Handle:plugin, numParams) {
     new nModelIndex = GetNativeCell(1);
+
+    decl String:sModelName[PROPNAME_LENGTH], String:sModelPath[PLATFORM_MAX_PATH];
+
+    GetArrayString(g_hModelNames, nModelIndex, sModelName, sizeof(sModelName));
+    GetArrayString(g_hModelPaths, nModelIndex, sModelPath, sizeof(sModelPath));
     
+    Call_StartForward(g_hForwardOnModelRemoved);
+    Call_PushString(sModelName);
+    Call_PushString(sModelPath);
+    Call_Finish();
+
     RemoveModelData(nModelIndex);
 }
 
