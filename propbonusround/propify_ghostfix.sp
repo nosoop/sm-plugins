@@ -11,7 +11,7 @@
 #include <sdktools>
 #include <propify>
 
-#define PLUGIN_VERSION          "0.0.4"     // Plugin version.
+#define PLUGIN_VERSION          "0.0.5"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Propify! Ghost Fix",
@@ -49,7 +49,7 @@ CheckForGhostModel() {
 
 // TODO Add checks on plugin reload and properly close handles?
 
-public OnPropified(client, propIndex) {
+public Propify_OnPropified(client, propIndex) {
     // None of the props are ghost props, so we don't need to process it.
     if (!g_bGhostFixRequired) {
         return;

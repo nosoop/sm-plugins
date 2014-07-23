@@ -7,8 +7,7 @@
 #include <sourcemod>
 #include <propify>
 
-#define PLUGIN_VERSION          "0.1.2"     // Plugin version.
-#define PROP_RANDOM_TOGGLE      -2          // Value to turn a player into a random prop or to turn them out of a prop.
+#define PLUGIN_VERSION          "0.2.0"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Propify! Persistence",
@@ -19,14 +18,22 @@ public Plugin:myinfo = {
 }
 
 new g_iPersistProp[MAXPLAYERS+1] = { -1, ... };
+new bool:g_bPersistPropOnPlayer[MAXPLAYERS+1];
 
 public OnPluginStart() {
-    RegAdminCmd("sm_pprop", Command_PropPersist, ADMFLAG_SLAY, "sm_pprop <#userid|name> [propindex] - toggles persistent prop on a player");
+    LoadTranslations("common.phrases");
     
+    RegAdminCmd("sm_pprop", Command_PropPersist, ADMFLAG_SLAY, "sm_pprop <#userid|name> <0|1> - toggles persistent prop on a player");
     HookEvent("player_spawn", Hook_PostPlayerSpawn);
 }
 
 // TODO Add checks for player disconnect.
+
+public Propify_OnPropified(client, propIndex) {
+    if (propIndex != -1) {
+        g_iPersistProp[client] = propIndex;
+    }
+}
 
 public Action:Command_PropPersist(client, args) {
     decl String:target[MAX_TARGET_LENGTH];
@@ -34,20 +41,18 @@ public Action:Command_PropPersist(client, args) {
     decl target_list[MAXPLAYERS];
     decl target_count;
     decl bool:tn_is_ml;
-    new propIndex = PROP_RANDOM_TOGGLE;
+    new bool:bEnabled;
     
-    if (args < 1) {
-        ReplyToCommand(client, "[SM] Usage: sm_pprop <#userid|name> [propindex] - toggles persistent prop on a player.");
+    if (args < 2) {
+        ReplyToCommand(client, "[SM] Usage: sm_pprop <#userid|name> <0|1> - toggles persistent prop on a player.");
         return Plugin_Handled;
     }
     
     GetCmdArg(1, target, sizeof(target));
     
-    if (args > 1) {
-        new String:propIndexStr[16];
-        GetCmdArg(2, propIndexStr, sizeof(propIndexStr));
-        propIndex = StringToInt(propIndexStr);
-    }
+    new String:propIndexStr[16];
+    GetCmdArg(2, propIndexStr, sizeof(propIndexStr));
+    bEnabled = StringToInt(propIndexStr) != 0;
     
     if((target_count = ProcessTargetString(target, client, target_list, 
             MAXPLAYERS, 0, target_name, sizeof(target_name), tn_is_ml)) <= 0) {
@@ -56,30 +61,14 @@ public Action:Command_PropPersist(client, args) {
     }
     
     for(new i = 0; i < target_count; i++) {
-        if (IsClientInGame(target_list[i]) && IsPlayerAlive(target_list[i])) {
-            PerformPropPlayer(client, target_list[i], propIndex);
+        if (IsClientInGame(target_list[i])) {
+            g_bPersistPropOnPlayer[target_list[i]] = bEnabled;
         }
     }
     
-    ShowActivity2(client, "[SM] ", "Toggled persistent prop on %s.", target_name);
+    ShowActivity2(client, "[SM] ", "Toggled prop persistence on %s.", target_name);
     
     return Plugin_Handled;
-}
-
-PerformPropPlayer(client, target, propIndex = PROP_RANDOM_TOGGLE) {
-    if(!IsClientInGame(target) || !IsPlayerAlive(target))
-        return;
-    
-    // If not a prop or we are forcing a prop by using a value >= PROP_RANDOM...
-    if(Propify_IsClientProp(target) || propIndex >= PROP_RANDOM) {
-        propIndex = Propify_PropPlayer(target, propIndex) > -1 ? propIndex : -1;
-    } else {
-        Propify_UnpropPlayer(target, true);
-        propIndex = -1;
-    }
-    
-    LogAction(client, target, "\"%L\" %s persistent prop on \"%L\"", client, Propify_IsClientProp(target) ? "set" : "removed", target);
-    g_iPersistProp[client] = propIndex;
 }
 
 public Hook_PostPlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast) {
@@ -89,7 +78,7 @@ public Hook_PostPlayerSpawn(Handle:event, const String:name[], bool:dontBroadcas
 }
 
 public Action:Timer_RepropPlayer(Handle:timer, any:client) {
-    if (g_iPersistProp[client] >= 0) {
+    if (g_bPersistPropOnPlayer[client]) {
         Propify_PropPlayer(client, g_iPersistProp[client]);
     }
 }
