@@ -11,34 +11,50 @@
 #include <sdktools>
 #include <propify>
 
-#define PLUGIN_VERSION          "0.0.2"     // Plugin version.
+#define PLUGIN_VERSION          "0.0.3"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Propify! Ghost Fix",
     author = "nosoop",
-    description = "Fixes glow remaining on players that use the ghost model.",
+    description = "Fixes glow effect remaining on players that use the ghost model.",
     version = PLUGIN_VERSION,
     url = "http://github.com/nosoop/sm-plugins"
 }
 
 new Handle:g_hModelPaths = INVALID_HANDLE;
+new bool:g_bGhostFixRequired;
 
 new String:g_saGhostModels[][] = {
-    "ghost_no_hat.mdl",
-    "ghost.mdl"
+    "models/props_halloween/ghost_no_hat.mdl",
+    "models/props_halloween/ghost.mdl"
 };
 
 public OnPluginStart() {
-    g_hModelPaths = GetModelPathsArray();
+    CheckForGhostModel();
 }
 
 public OnPropListLoaded() {
+    CheckForGhostModel();
+}
+
+// Checks to see if the ghost model is in the current prop list.
+CheckForGhostModel() {
     g_hModelPaths = GetModelPathsArray();
+    
+    g_bGhostFixRequired = false;
+    for (new i = 0; i < sizeof(g_saGhostModels); i++) {
+        g_bGhostFixRequired = g_bGhostFixRequired || FindStringInArray(g_hModelPaths, g_saGhostModels[i]) > -1;
+    }
 }
 
 // TODO Add checks on plugin reload and properly close handles?
 
 public OnPropified(client, propIndex) {
+    // None of the props are ghost props, so we don't need to process it.
+    if (!g_bGhostFixRequired) {
+        return;
+    }
+
     // Check if we are currently a ghost.
     new bool:bIsGhostNow;
     if (propIndex < 0) {
@@ -51,11 +67,12 @@ public OnPropified(client, propIndex) {
         
         // We are a ghost if the model path contains one of the strings mentioned above.
         for (new i = 0; i < sizeof(g_saGhostModels); i++) {
-            bIsGhostNow = bIsGhostNow || StrContains(sModelPath, g_saGhostModels[i]) != -1;
+            bIsGhostNow = bIsGhostNow || StrEqual(sModelPath, g_saGhostModels[i]);
         }
     }
     
     // If we aren't a ghost now, kill off the glow particle effect.
+    // We shouldn't call this if the prop is currently a ghost, so we're leaving it as a separate plugin.
     if (!bIsGhostNow) {
         // Fix sourced from the Ghost Mode Redux plugin:
         // https://forums.alliedmods.net/showthread.php?p=1883875
