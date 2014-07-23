@@ -10,7 +10,7 @@
 #include <sourcemod>
 #include <propify>
 
-#define PLUGIN_VERSION          "0.3.0"     // Plugin version.
+#define PLUGIN_VERSION          "0.4.0"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Propify! Plus",
@@ -35,6 +35,10 @@ public OnPluginStart() {
     // Prop By Name
     RegAdminCmd("sm_propbyname", Command_PropByName, ADMFLAG_SLAY, "sm_propbyname <#userid|name> <prop name> - attempts to force a prop on a player by name");
     RegAdminCmd("sm_propn", Command_PropByName, ADMFLAG_SLAY);
+    
+    // Filtering targets by whether they are propped or not.
+    AddMultiTargetFilter("@props", TargetFilter_Propify, "all props", false);
+    AddMultiTargetFilter("@!props", TargetFilter_Propify, "all not-props", false);
 }
 
 public Propify_OnPropified(client, propIndex) {
@@ -147,3 +151,16 @@ public Action:Timer_RepropPlayer(Handle:timer, any:client) {
         Propify_PropPlayer(client, g_iPersistProp[client]);
     }
 }
+
+public bool:TargetFilter_Propify(const String:strPattern[], Handle:hClients) {
+    new bool:bInvert = (strPattern[1] == '!');
+    
+    for(new i = 1; i <= MaxClients; i++) {
+        if (IsClientInGame(i)) {
+            if (Propify_IsClientProp(i) != bInvert)
+                PushArrayCell(hClients, i);
+        }
+    }
+    return true;
+}
+
