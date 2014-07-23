@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "2.7.0"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "3.0.0"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -119,23 +119,23 @@ public OnPluginStart() {
     HookPropifyPluginEvents(true);
     
     // Create forwards.
-    g_hForwardOnPropified = CreateGlobalForward("OnPropified", ET_Ignore, Param_Cell, Param_Cell);
-    g_hForwardOnPropListLoaded = CreateGlobalForward("OnPropListLoaded", ET_Ignore);
-    g_hForwardOnModelAdded = CreateGlobalForward("OnModelAdded", ET_Ignore, Param_String, Param_String);
-    g_hForwardOnModelRemoved = CreateGlobalForward("OnModelRemoved", ET_Ignore, Param_String, Param_String);
+    g_hForwardOnPropified = CreateGlobalForward("Propify_OnPropified", ET_Ignore, Param_Cell, Param_Cell);
+    g_hForwardOnPropListLoaded = CreateGlobalForward("Propify_OnPropListLoaded", ET_Ignore);
+    g_hForwardOnModelAdded = CreateGlobalForward("Propify_OnModelAdded", ET_Ignore, Param_String, Param_String);
+    g_hForwardOnModelRemoved = CreateGlobalForward("Propify_OnModelRemoved", ET_Ignore, Param_String, Param_String);
     
     AutoExecConfig(true, "plugin.propify");
 }
 
 public APLRes:AskPluginLoad2(Handle:hMySelf, bool:bLate, String:strError[], iMaxErrors) {
     RegPluginLibrary("nosoop-propify");
-    CreateNative("PropPlayer", Native_PropPlayer);
-    CreateNative("UnpropPlayer", Native_UnpropPlayer);
-    CreateNative("IsClientProp", Native_IsClientProp);
-    CreateNative("AddModelData", Native_AddModelData);
-    CreateNative("RemoveModelData", Native_RemoveModelData);
-    CreateNative("GetModelNamesArray", Native_GetModelNamesArray);
-    CreateNative("GetModelPathsArray", Native_GetModelPathsArray);
+    CreateNative("Propify_PropPlayer", Native_PropPlayer);
+    CreateNative("Propify_UnpropPlayer", Native_UnpropPlayer);
+    CreateNative("Propify_IsClientProp", Native_IsClientProp);
+    CreateNative("Propify_AddModelData", Native_AddModelData);
+    CreateNative("Propify_RemoveModelData", Native_RemoveModelData);
+    CreateNative("Propify_GetModelNamesArray", Native_GetModelNamesArray);
+    CreateNative("Propify_GetModelPathsArray", Native_GetModelPathsArray);
 
     return APLRes_Success;
 }

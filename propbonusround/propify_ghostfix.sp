@@ -11,7 +11,7 @@
 #include <sdktools>
 #include <propify>
 
-#define PLUGIN_VERSION          "0.0.3"     // Plugin version.
+#define PLUGIN_VERSION          "0.0.4"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Propify! Ghost Fix",
@@ -39,7 +39,7 @@ public OnPropListLoaded() {
 
 // Checks to see if the ghost model is in the current prop list.
 CheckForGhostModel() {
-    g_hModelPaths = GetModelPathsArray();
+    g_hModelPaths = Propify_GetModelPathsArray();
     
     g_bGhostFixRequired = false;
     for (new i = 0; i < sizeof(g_saGhostModels); i++) {

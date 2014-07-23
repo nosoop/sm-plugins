@@ -7,7 +7,7 @@
 #include <sourcemod>
 #include <propify>
 
-#define PLUGIN_VERSION          "0.1.1"     // Plugin version.
+#define PLUGIN_VERSION          "0.1.2"     // Plugin version.
 #define PROP_RANDOM_TOGGLE      -2          // Value to turn a player into a random prop or to turn them out of a prop.
 
 public Plugin:myinfo = {
@@ -71,14 +71,14 @@ PerformPropPlayer(client, target, propIndex = PROP_RANDOM_TOGGLE) {
         return;
     
     // If not a prop or we are forcing a prop by using a value >= PROP_RANDOM...
-    if(IsClientProp(target) || propIndex >= PROP_RANDOM) {
-        propIndex = PropPlayer(target, propIndex) > -1 ? propIndex : -1;
+    if(Propify_IsClientProp(target) || propIndex >= PROP_RANDOM) {
+        propIndex = Propify_PropPlayer(target, propIndex) > -1 ? propIndex : -1;
     } else {
-        UnpropPlayer(target, true);
+        Propify_UnpropPlayer(target, true);
         propIndex = -1;
     }
     
-    LogAction(client, target, "\"%L\" %s persistent prop on \"%L\"", client, IsClientProp(target) ? "set" : "removed", target);
+    LogAction(client, target, "\"%L\" %s persistent prop on \"%L\"", client, Propify_IsClientProp(target) ? "set" : "removed", target);
     g_iPersistProp[client] = propIndex;
 }
 
@@ -90,6 +90,6 @@ public Hook_PostPlayerSpawn(Handle:event, const String:name[], bool:dontBroadcas
 
 public Action:Timer_RepropPlayer(Handle:timer, any:client) {
     if (g_iPersistProp[client] >= 0) {
-        PropPlayer(client, g_iPersistProp[client]);
+        Propify_PropPlayer(client, g_iPersistProp[client]);
     }
 }

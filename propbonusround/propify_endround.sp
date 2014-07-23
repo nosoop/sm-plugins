@@ -18,7 +18,7 @@
 #include <tf2_stocks>
 #include <propify>
 
-#define PLUGIN_VERSION          "2.1.9"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.1.10"    // Plugin version.  Am I doing semantic versioning right?
 
                                             // In humiliation...
 #define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
@@ -178,7 +178,7 @@ public Action:Timer_EquipProps(Handle:timer) {
         }
                 
         //If player is already a prop, skip id.
-        if (IsClientProp(x)) {
+        if (Propify_IsClientProp(x)) {
             continue;
         }
         
@@ -203,7 +203,7 @@ public Action:Timer_EquipProps(Handle:timer) {
                 AcceptEntityInput(hRagdoll, "kill");
             }
             
-            PropPlayer(x, _, bClientJustRespawned);
+            Propify_PropPlayer(x, _, bClientJustRespawned);
             
             if (g_iWinningTeam != 0) {
                 PrintCenterText(x, "You've been turned into a prop!  Blend in!");
@@ -280,7 +280,7 @@ public Cvars_Changed(Handle:convar, const String:oldValue[], const String:newVal
             // Unprop and respawn the player when the plugin is disabled dynamically.
             for (new x = 1; x <= MaxClients; x++) {
                 if(IsClientInGame(x) && IsPlayerAlive(x)) {
-                    UnpropPlayer(x, true);
+                    Propify_UnpropPlayer(x, true);
                 }
             }
         }

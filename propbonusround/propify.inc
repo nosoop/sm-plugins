@@ -20,13 +20,14 @@ public SharedPlugin:__pl_propify = {
 #define PROP_RANDOM_TOGGLE      -2          // Value to turn a player into a random prop or to turn them out of a prop.
 
 public __pl_propify_SetNTVOptional() {
-    MarkNativeAsOptional("PropPlayer");
-    MarkNativeAsOptional("UnropPlayer");
-    MarkNativeAsOptional("IsClientProp");
-    MarkNativeAsOptional("SetThirdPersonOnProp");
-    MarkNativeAsOptional("AddModelData");
-    MarkNativeAsOptional("RemoveModelData");
-    MarkNativeAsOptional("GetModelDataArrays");
+    MarkNativeAsOptional("Propify_PropPlayer");
+    MarkNativeAsOptional("Propify_UnropPlayer");
+    MarkNativeAsOptional("Propify_IsClientProp");
+    MarkNativeAsOptional("Propify_SetThirdPersonOnProp");
+    MarkNativeAsOptional("Propify_AddModelData");
+    MarkNativeAsOptional("Propify_RemoveModelData");
+    MarkNativeAsOptional("Propify_GetModelNamesArray");
+    MarkNativeAsOptional("Propify_GetModelPathsArray");
 }
 
 /**
@@ -36,7 +37,7 @@ public __pl_propify_SetNTVOptional() {
  * @param propIndex         The prop the client was turned into, or -1 if not propped.
  * @noreturn
  */
-forward OnPropified(client, propIndex);
+forward Propify_OnPropified(client, propIndex);
 
 /**
  * Called when the prop list has been cleared and populated.
@@ -44,23 +45,27 @@ forward OnPropified(client, propIndex);
  *
  * @noreturn
  */
-forward OnPropListLoaded();
+forward Propify_OnPropListLoaded();
 
 /**
  * Called when an external plugin has added a model to the list.
  * This is not called when Propify! adds its own models to the list.
  *
+ * @param sModelName        The name of the model added.
+ * @param sModelPath        The path of the model added.
  * @noreturn
  */
-forward OnModelAdded(const String:sModelName[], const String:sModelPath[]);
+forward Propify_OnModelAdded(const String:sModelName[], const String:sModelPath[]);
 
 /**
  * Called when an external plugin has removed a model from the list.
- * This is not called when Propify! adds its own models to the list.
+ * This is not called when Propify! clears and refreshes the model list.
  *
+ * @param sModelName        The name of the model removed.
+ * @param sModelPath        The path of the model removed.
  * @noreturn
  */
-forward OnModelRemoved(const String:sModelName[], const String:sModelPath[]);
+forward Propify_OnModelRemoved(const String:sModelName[], const String:sModelPath[]);
 
 
 /**
@@ -72,53 +77,53 @@ forward OnModelRemoved(const String:sModelName[], const String:sModelPath[]);
  *                          (False if they are being propped at end-round.)
  * @return                  Index value of the prop the player is propped as, or -1 if not propped.
  */
-native PropPlayer(client, propIndex = -1, bool:forceThirdPerson = true);
+native Propify_PropPlayer(client, propIndex = -1, bool:forceThirdPerson = true);
 
 /**
  * Attempts to unprop a player.
  * 
- * @param client        Client index.
- * @param respawn       Whether or not removing the prop on the player should do an in-place respawn.
- *                      An in-place respawn returns the client's weapons.
- * @return              Boolean noting that the client is now not a prop.
+ * @param client            Client index.
+ * @param respawn           Whether or not removing the prop on the player should do an in-place respawn.
+ *                          An in-place respawn returns the client's weapons.
+ * @return                  Boolean noting that the client is now not a prop.
  */
-native bool:UnpropPlayer(client, bool:respawn = false);
+native bool:Propify_UnpropPlayer(client, bool:respawn = false);
 
 /**
  * Checks whether or not the specified client is currently a prop.
  *
- * @param client        Client index.
- * @return              Boolean noting whether or not the client is a prop.
+ * @param client            Client index.
+ * @return                  Boolean noting whether or not the client is a prop.
  */
-native bool:IsClientProp(client);
+native bool:Propify_IsClientProp(client);
 
 /**
  * Adds a model to the prop list.
  * 
- * @param modelName     The visible name of the model.
- * @param modelPath     The path to the model file, starting with the models subdirectory.
+ * @param modelName         The visible name of the model.
+ * @param modelPath         The path to the model file, starting with the models subdirectory.
  */
-native AddModelData(const String:modelName[], const String:modelPath[]);
+native Propify_AddModelData(const String:modelName[], const String:modelPath[]);
 
 /**
  * Removes a model from the prop list.
  *
- * @param nModelIndex   The index of the prop to remove.
+ * @param nModelIndex       The index of the prop to remove.
  */
- native RemoveModelData(nModelIndex);
+ native Propify_RemoveModelData(nModelIndex);
 
 /**
- * Gets the handles for the model name and path arrays for raw access.
+ * Gets the handle for the model name array for raw access.
  * Remember to sync additions and removals between the arrays.
  *
- * @return              A Handle pointing to an adt_array containing model names.
+ * @return                  A Handle pointing to an adt_array containing model names.
  */
-native Handle:GetModelNamesArray();
+native Handle:Propify_GetModelNamesArray();
 
 /**
- * Gets the handles for the model name and path arrays for raw access.
+ * Gets the handle for the model path array for raw access.
  * Remember to sync changes between the arrays.
  *
- * @return              A Handle pointing to an adt_array containing model paths.
+ * @return                  A Handle pointing to an adt_array containing model paths.
  */
-native Handle:GetModelPathsArray();
+native Handle:Propify_GetModelPathsArray();
