@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "3.0.1"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "3.0.2"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -103,10 +103,10 @@ public OnPluginStart() {
     CreateConVar("sm_propify_version", PLUGIN_VERSION, "Version of Propify!", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY);
     
     // Create and hook cvars.
-    g_hCPluginEnabled = CreateConVar("sm_propify_enabled", "1", "Enable / disable the propify plugin.  Disabling the plugin unprops all propped players.");
+    g_hCPluginEnabled = CreateConVar("sm_propify_enabled", "1", "Enable / disable the propify plugin.  Disabling the plugin unprops all propped players.", _, true, 0.0, true, 1.0);
     HookConVarChange(g_hCPluginEnabled, Cvars_Changed);
     
-    g_hCPropSpeed = CreateConVar("sm_propify_forcespeed", "0", "Force all props to a specific speed, in an integer representing HU/s.  Setting this to 0 allows props to move at their default class speed.");
+    g_hCPropSpeed = CreateConVar("sm_propify_forcespeed", "0", "Force all props to a specific speed, in an integer representing HU/s.  Setting this to 0 allows props to move at their default class speed.", _, true, 0.0);
     HookConVarChange(g_hCPropSpeed, Cvars_Changed);
     
     // Command to prop a player.

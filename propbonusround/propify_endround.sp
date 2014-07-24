@@ -18,7 +18,7 @@
 #include <tf2_stocks>
 #include <propify>
 
-#define PLUGIN_VERSION          "2.2.0"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.2.1"     // Plugin version.  Am I doing semantic versioning right?
 
                                             // In humiliation...
 #define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
@@ -80,28 +80,28 @@ public OnPluginStart() {
     CreateConVar("sm_propbonus_version", PLUGIN_VERSION, "Version of Prop Bonus Round", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_DONTRECORD);
     
     // Create and hook cvars.
-    g_hCPluginEnabled = CreateConVar("sm_propbonus_enabled", "1", "Enable / disable prop bonus round plugin.");
+    g_hCPluginEnabled = CreateConVar("sm_propbonus_enabled", "1", "Enable / disable prop bonus round plugin.", _, true, 0.0, true, 1.0);
     HookConVarChange(g_hCPluginEnabled, Cvars_Changed);
     
-    g_hCAdminOnly = CreateConVar("sm_propbonus_adminonly", "0", "Enable props for admins only?");
+    g_hCAdminOnly = CreateConVar("sm_propbonus_adminonly", "0", "Enable props for admins only?", _, true, 0.0, true, 1.0);
     HookConVarChange(g_hCAdminOnly, Cvars_Changed);
     
     Cvar_AdminFlag = CreateConVar("sm_propbonus_flag", "b", "Admin flag to use if adminonly is enabled (only one).  Must be a in char format.");
     
-    g_hCAnnouncePropRound = CreateConVar("sm_propbonus_announcement", "1", "Whether or not an announcement is made about the prop hunting end-round.");
+    g_hCAnnouncePropRound = CreateConVar("sm_propbonus_announcement", "1", "Whether or not an announcement is made about the prop hunting end-round.", _, true, 0.0, true, 1.0);
     HookConVarChange(g_hCAnnouncePropRound, Cvars_Changed);
 
     g_hCDmgUnprops = CreateConVar("sm_propbonus_damageglow", "0", "Whether or not damage taken by hiding players during the humiliation round are set to glow, revealing them.\n" ...
             "  Value can be one of the following:\n" ...
             "  0 = Never,\n" ...
             "  1 = From other players,\n" ...
-            "  2 = Any source.");
+            "  2 = Any source.", _, true, 0.0, true, 2.0);
     HookConVarChange(g_hCDmgUnprops, Cvars_Changed);
 
-    g_hCHumiliationRespawn = CreateConVar("sm_propbonus_forcespawn", "0", "Whether or not dead players are respawned and turned into a prop.");
+    g_hCHumiliationRespawn = CreateConVar("sm_propbonus_forcespawn", "0", "Whether or not dead players are respawned and turned into a prop.", _, true, 0.0, true, 1.0);
     HookConVarChange(g_hCHumiliationRespawn, Cvars_Changed);
     
-    g_hCTargetRound = CreateConVar("sm_propbonus_targetroundchance", "0.0", "Chance that the bonus round will make all losing players wooden targets.");
+    g_hCTargetRound = CreateConVar("sm_propbonus_targetroundchance", "0.0", "Chance that the bonus round will make all losing players wooden targets.", _, true, 0.0, true, 1.0);
     HookConVarChange(g_hCTargetRound, Cvars_Changed);
         
     // Hook round events to set and unset props.
