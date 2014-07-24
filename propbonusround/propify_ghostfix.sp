@@ -63,7 +63,9 @@ public Propify_OnPropified(client, propIndex) {
     } else {
         // Declare a string for the model path.
         new String:sModelPath[PLATFORM_MAX_PATH];
-        GetArrayString(g_hModelPaths, propIndex, sModelPath, sizeof(sModelPath));
+        
+        new Handle:hModelPaths = Propify_GetModelPathsArray();
+        GetArrayString(hModelPaths, propIndex, sModelPath, sizeof(sModelPath));
         
         // We are a ghost if the model path contains one of the strings mentioned above.
         for (new i = 0; i < sizeof(g_saGhostModels); i++) {
