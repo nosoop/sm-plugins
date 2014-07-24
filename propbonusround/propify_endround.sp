@@ -18,7 +18,7 @@
 #include <tf2_stocks>
 #include <propify>
 
-#define PLUGIN_VERSION          "2.1.10"    // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.1.11"    // Plugin version.  Am I doing semantic versioning right?
 
                                             // In humiliation...
 #define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
@@ -49,7 +49,7 @@ new bool:g_bIsPlayerGlowing[MAXPLAYERS + 1];
 new bool:g_bIsPlayerAdmin[MAXPLAYERS + 1];
 
 // Humiliation mode handling.
-new bool:g_bBonusRound, g_iWinningTeam;
+new bool:g_bBonusRound, TFTeam:g_iWinningTeam;
 
 new String:g_sCharAdminFlag[32];
 
@@ -145,7 +145,7 @@ public Hook_PostRoundWin(Handle:event, const String:name[], bool:dontBroadcast) 
         return;
 
     g_bBonusRound = true;
-    g_iWinningTeam = GetEventInt(event, "team");
+    g_iWinningTeam = TFTeam:GetEventInt(event, "team");
     
     if (!IsEntLimitReached()) {
         if (g_bAnnouncePropRound) {
@@ -173,7 +173,7 @@ public Action:Timer_EquipProps(Handle:timer) {
             continue;
         }
         
-        if (GetClientTeam(x) == g_iWinningTeam) {
+        if (TFTeam:GetClientTeam(x) == g_iWinningTeam) {
             continue;
         }
                 
@@ -197,7 +197,6 @@ public Action:Timer_EquipProps(Handle:timer) {
 
         if (IsPlayerAlive(x)) {
             // Kill off any existing ragdoll entities to prevent the camera from focusing on it.
-            
             new hRagdoll = GetEntPropEnt(x, Prop_Send, "m_hRagdoll");
             if (IsValidEntity(hRagdoll)) {
                 AcceptEntityInput(hRagdoll, "kill");
@@ -205,7 +204,7 @@ public Action:Timer_EquipProps(Handle:timer) {
             
             Propify_PropPlayer(x, _, bClientJustRespawned);
             
-            if (g_iWinningTeam != 0) {
+            if (g_iWinningTeam != TFTeam_Unassigned) {
                 PrintCenterText(x, "You've been turned into a prop!  Blend in!");
             } else {
                 PrintCenterText(x, "Everyone's been turned into a prop!");
