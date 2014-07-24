@@ -11,7 +11,7 @@
 #include <sdktools>
 #include <propify>
 
-#define PLUGIN_VERSION          "0.0.5"     // Plugin version.
+#define PLUGIN_VERSION          "0.0.6"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Propify! Ghost Fix",
@@ -21,7 +21,6 @@ public Plugin:myinfo = {
     url = "http://github.com/nosoop/sm-plugins"
 }
 
-new Handle:g_hModelPaths = INVALID_HANDLE;
 new bool:g_bGhostFixRequired;
 
 new String:g_saGhostModels[][] = {
@@ -39,12 +38,13 @@ public OnPropListLoaded() {
 
 // Checks to see if the ghost model is in the current prop list.
 CheckForGhostModel() {
-    g_hModelPaths = Propify_GetModelPathsArray();
+    new Handle:hModelPaths = Propify_GetModelPathsArray();
     
     g_bGhostFixRequired = false;
     for (new i = 0; i < sizeof(g_saGhostModels); i++) {
-        g_bGhostFixRequired = g_bGhostFixRequired || FindStringInArray(g_hModelPaths, g_saGhostModels[i]) > -1;
+        g_bGhostFixRequired = g_bGhostFixRequired || FindStringInArray(hModelPaths, g_saGhostModels[i]) > -1;
     }
+    CloseHandle(hModelPaths);
 }
 
 // TODO Add checks on plugin reload and properly close handles?
@@ -71,6 +71,8 @@ public Propify_OnPropified(client, propIndex) {
         for (new i = 0; i < sizeof(g_saGhostModels); i++) {
             bIsGhostNow = bIsGhostNow || StrEqual(sModelPath, g_saGhostModels[i]);
         }
+        
+        CloseHandle(hModelPaths);
     }
     
     // If we aren't a ghost now, kill off the glow particle effect.
