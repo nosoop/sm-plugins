@@ -29,7 +29,20 @@ public __pl_propify_SetNTVOptional() {
     MarkNativeAsOptional("Propify_GetModelNamesArray");
     MarkNativeAsOptional("Propify_GetModelPathsArray");
     MarkNativeAsOptional("Propify_GetRandomPropIndex");
+    MarkNativeAsOptional("Propify_RegisterConfigHandler");
+    MarkNativeAsOptional("Propify_UnregisterConfigHandler");
+    MarkNativeAsOptional("Propify_UnregisterConfigHandlers");
 }
+
+/**
+ * Function to read the key / value pairs off a config in a registered section.
+ * This way, you can put all your configuration data along with the rest of the prop lists.
+ * Do note that if the method is registered late, the ConfigHandler will not be used until the next proplist reload.
+ * 
+ * @param key               A parsed key string.
+ * @param value             A parsed value string.
+ */
+functag ConfigHandler public(const String:key[], const String:value[]);
 
 /**
  * Called when a client is turned into a (possibly different) prop, or when they are unpropped.
@@ -135,3 +148,26 @@ native Handle:Propify_GetModelPathsArray();
  * @return                  A random integer representing a valid prop index.
  */
 native Propify_GetRandomPropIndex();
+
+/**
+ * Attempts to register a ConfigHandler method to be fired when in a specified section of the prop config.
+ * Fails to register if there is already a handler associated with the section name.
+ * Remember to unregister them when unloading the plugin.
+ *
+ * @param sSection          The section name to handle.
+ * @param sectionHandler    A ConfigHandler method to be called for the key/value pairs in the section.
+ */
+native Propify_RegisterConfigHandler(const String:sSection[], ConfigHandler:sectionHandler);
+
+/**
+ * Attempts to unregister a ConfigHandler method associated with the specified section name.
+ * Fails if the plugin did not register the section.
+ *
+ * @param sSection          The section name to unregister.
+ */
+native Propify_UnregisterConfigHandler(const String:sSection[]);
+
+/**
+ * Unregisters all ConfigHandler methods associated with the calling plugin.
+ */
+native Propify_UnregisterConfigHandlers();

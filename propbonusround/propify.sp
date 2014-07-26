@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "3.2.0"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "3.3.0"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -34,10 +34,7 @@
 #define PROP_RANDOM_TOGGLE      -2          // Value to turn a player into a random prop or to turn them out of a prop if they are in one.
 
 #define PROPLIST_BASEFILE       "base"      // Base configuration file.
-#define PROPLIST_ROOT           0           // Constants for sections of the configuration. (No reads.)
-#define PROPLIST_PROPS          1           // Section "proplist" - KV: "prop name" "models/path/to/prop/file.mdl"
-#define PROPLIST_INCLUDELIST    2           // Section "includes" - KV: "any value" "file name to load another propconfig"
-#define PROPLIST_SPAWNPOS       3           // Section "spawnpos" - KV: "any value" "X Y Z P Y R" (spawn positions and angles?) -- UNUSED
+#define PROPLIST_SECTIONLENGTH  16          // Maximum length of a section name in the proplist.
 
 #define PROPNAME_LENGTH         32          // The maximum length of a prop name.
 
@@ -49,17 +46,21 @@ public Plugin:myinfo = {
     url = "https://github.com/nosoop/sm-plugins"
 }
 
+// Function tag for a registerable config handler.
+functag ConfigHandler public(const String:key[], const String:value[]);
+
 new Handle:hAdminMenu = INVALID_HANDLE;
 
 // Arrays for prop models, names, and a list of additional files to load.
-new g_iPropListSection = PROPLIST_ROOT;
+new g_iPropListSection = -1;
 new Handle:g_hModelNames = INVALID_HANDLE, Handle:g_hModelPaths = INVALID_HANDLE;
 new Handle:g_hIncludePropLists = INVALID_HANDLE;
+new Handle:rg_hPropListHandlerSections = INVALID_HANDLE, Handle:rg_hPropListHandlers = INVALID_HANDLE;
 
 // ConVars and junk.  For references, see OnPluginStart().
-new Handle:g_hCPluginEnabled = INVALID_HANDLE,      bool:g_bPluginEnabled;      // sm_propify_enabled
-new Handle:g_hCPropSpeed = INVALID_HANDLE,          g_iPropSpeed;               // sm_propify_forcespeed
-new Handle:g_hCKillIfUnhidable = INVALID_HANDLE,    bool:g_bKillIfUnhidable;    // sm_propify_killentifunhidable
+new Handle:g_hCPluginEnabled = INVALID_HANDLE,      bool:g_bPluginEnabled,      // sm_propify_enabled
+    Handle:g_hCPropSpeed = INVALID_HANDLE,          g_iPropSpeed,               // sm_propify_forcespeed
+    Handle:g_hCKillIfUnhidable = INVALID_HANDLE,    bool:g_bKillIfUnhidable;    // sm_propify_killentifunhidable
 
 // Boolean flags for prop functions.
 new bool:g_bIsProp[MAXPLAYERS+1],
@@ -89,6 +90,9 @@ new Handle:g_hForwardOnPropified,       // Turned a player into a prop or out of
     Handle:g_hForwardOnPropListLoaded,  // Cleared and reloaded model list.
     Handle:g_hForwardOnModelAdded,      // External plugin added a prop.
     Handle:g_hForwardOnModelRemoved;    // External plugin removed a prop.
+
+// Private forward.
+new Handle:g_hPForwardConfigHandler;    // Calls a registered plugin's ConfigHandler method when appropriate.
 
 public OnPluginStart() {
     new String:strGame[10];
@@ -127,6 +131,13 @@ public OnPluginStart() {
     g_hForwardOnModelAdded = CreateGlobalForward("Propify_OnModelAdded", ET_Ignore, Param_String, Param_String);
     g_hForwardOnModelRemoved = CreateGlobalForward("Propify_OnModelRemoved", ET_Ignore, Param_String, Param_String);
     
+    // Create private forwards.
+    g_hPForwardConfigHandler = CreateForward(ET_Ignore, Param_String, Param_String);
+    
+    // Register own plugin's config handlers.
+    RegisterConfigHandler(INVALID_HANDLE, "proplist", ConfigHandler_PropList);
+    RegisterConfigHandler(INVALID_HANDLE, "includes", ConfigHandler_IncludeList);
+    
     AutoExecConfig(true, "plugin.propify");
 }
 
@@ -140,6 +151,9 @@ public APLRes:AskPluginLoad2(Handle:hMySelf, bool:bLate, String:strError[], iMax
     CreateNative("Propify_GetModelNamesArray", Native_GetModelNamesArray);
     CreateNative("Propify_GetModelPathsArray", Native_GetModelPathsArray);
     CreateNative("Propify_GetRandomPropIndex", Native_GetRandomPropIndex);
+    CreateNative("Propify_RegisterConfigHandler", Native_RegisterConfigHandler);
+    CreateNative("Propify_UnregisterConfigHandler", Native_UnregisterConfigHandler);
+    CreateNative("Propify_UnregisterConfigHandlers", Native_UnregisterConfigHandlers);
     
     return APLRes_Success;
 }
@@ -785,39 +799,26 @@ ReadPropConfigurationFile(const String:fileName[]) {
 }
 
 public SMCResult:Config_NewSection(Handle:parser, const String:section[], bool:quotes) {
-    // Read the current config section.
-    if (StrEqual(section, "proplist")) {
-        g_iPropListSection = PROPLIST_PROPS;
-    } else if (StrEqual(section, "includes")) {
-        g_iPropListSection = PROPLIST_INCLUDELIST;
-    } else if (StrEqual(section, "spawns")) {
-        g_iPropListSection = PROPLIST_SPAWNPOS;
-    } else {
-        g_iPropListSection = PROPLIST_ROOT;
-    }
+    // Select the associated config-handling index based on key.
+    g_iPropListSection = FindStringInArray(rg_hPropListHandlerSections, section);
+    
     return SMCParse_Continue;
 }
 
 public SMCResult:Config_KeyValue(Handle:parser, const String:key[], const String:value[], bool:key_quotes, bool:value_quotes) {
-    // Check which section we are in and read accordingly.
-    switch(g_iPropListSection) {
-        case PROPLIST_PROPS: {
-            // Currently in the prop list section.  Add to appropriate prop arrays.
-            AddModelData(key, value);
-        }
-        case PROPLIST_INCLUDELIST: {
-            // Read any values that aren't already in the external prop list array.
-            if (FindStringInArray(g_hIncludePropLists, value) == -1) {
-                PushArrayString(g_hIncludePropLists, value);
-            }
-        }
-        case PROPLIST_SPAWNPOS: {
-            // To be implemented:
-            // Custom spawn positions for spawning dead players.
-        }
-        default: {
-            // Do not read anything.
-        }
+    // Iterate through all the plugins to remove from the forward call.
+    // TODO Optimize by moving what we can to the Config_NewSection method.
+    for (new i = 0; i < GetArraySize(rg_hPropListHandlers); i++) {
+        RemoveAllFromForward(g_hPForwardConfigHandler, GetConfigHandlerPlugin(i));
+    }
+    
+    // Check which section we are in and forward it to an applicable method.
+    if (g_iPropListSection > -1) {
+        AddToForward(g_hPForwardConfigHandler, GetConfigHandlerPlugin(g_iPropListSection), GetConfigHandlerFunction(g_iPropListSection));
+        Call_StartForward(g_hPForwardConfigHandler);
+        Call_PushString(key);
+        Call_PushString(value);
+        Call_Finish();
     }
     return SMCParse_Continue;
 }
@@ -831,6 +832,111 @@ public Config_End(Handle:parser, bool:halted, bool:failed) {
         SetFailState("Plugin configuration error");
     }
 }
+
+
+/**
+ * Config handlers.  Other plugins can read their own key / value pairs from the prop config.
+ */
+// Config handler for section "proplist" -- adds key to the prop name array and value to prop paths array.
+public ConfigHandler_PropList(const String:key[], const String:value[]) {
+    // Currently in the prop list section.  Add to appropriate prop arrays.
+    AddModelData(key, value);
+}
+
+// Config handler for section "includes" -- adds value to the prop list array to load more prop lists.
+public ConfigHandler_IncludeList(const String:key[], const String:value[]) {
+    // Read any values that aren't already in the external prop list array.
+    if (FindStringInArray(g_hIncludePropLists, value) == -1) {
+        PushArrayString(g_hIncludePropLists, value);
+    }
+}
+
+// Registers a config handler by plugin, section to register with, and the function to call within the plugin.  Sections can only be associated with one handler at a time.
+// TODO Add the ability to only call the handler for the specific map list.
+RegisterConfigHandler(Handle:plugin = INVALID_HANDLE, const String:sSection[], ConfigHandler:sectionHandler) {
+    if (rg_hPropListHandlerSections == INVALID_HANDLE) {
+        rg_hPropListHandlerSections = CreateArray(PROPLIST_SECTIONLENGTH);
+        rg_hPropListHandlers = CreateArray(2); // plugin handle, function
+    }
+    
+    // Only add if no other plugin has registered a handler.
+    if (FindStringInArray(rg_hPropListHandlerSections, sSection) == -1) {
+        new handlerIndex;
+        PushArrayString(rg_hPropListHandlerSections, sSection);
+        
+        // Push plugin handle into first secrion.
+        handlerIndex = PushArrayCell(rg_hPropListHandlers, plugin);
+        SetConfigHandlerFunction(handlerIndex, sectionHandler);
+        return handlerIndex;
+    }
+    return -1;
+}
+
+// Native registration function for external use.
+public Native_RegisterConfigHandler(Handle:plugin, numParams) {
+    new String:sSection[PROPLIST_SECTIONLENGTH];
+    GetNativeString(1, sSection, sizeof(sSection));
+    
+    new ConfigHandler:sectionHandler = GetNativeCell(2);
+    
+    return RegisterConfigHandler(plugin, sSection, sectionHandler);
+}
+
+// Unregister a handler by section name.
+UnregisterConfigHandler(Handle:plugin, const String:sSection[]) {
+    new iPluginHandler = -1;
+    
+    // Search for applicable section.
+    if ( (iPluginHandler = FindStringInArray(rg_hPropListHandlerSections, sSection)) > -1) {
+        // Verify that the calling plugin owns the handler for the section
+        if (GetConfigHandlerPlugin(iPluginHandler) == plugin) {
+            RemoveConfigHandler(iPluginHandler);
+        }
+    }
+}
+
+// Native unregistration function.
+public Native_UnregisterConfigHandler(Handle:plugin, numParams) {
+    new String:sSection[PROPLIST_SECTIONLENGTH];
+    GetNativeString(1, sSection, sizeof(sSection));
+    
+    UnregisterConfigHandler(plugin, sSection);
+}
+
+// Removes all handlers registered a specified plugin.
+UnregisterConfigHandlers(Handle:plugin) {
+    new iPluginHandler = -1;
+    while ( (iPluginHandler = FindValueInArray(rg_hPropListHandlers, plugin)) > -1) {
+        RemoveConfigHandler(iPluginHandler);
+    }
+}
+
+// Native all-unregistration function.
+public Native_UnregisterConfigHandlers(Handle:plugin, numParams) {
+    UnregisterConfigHandlers(plugin);
+}
+
+// Helper method to remove the handler association.
+RemoveConfigHandler(index) {
+    RemoveFromArray(rg_hPropListHandlerSections, index);
+    RemoveFromArray(rg_hPropListHandlers, index);
+}
+
+// Helper method to put the ConfigHandler method index into the array (in block 1).
+SetConfigHandlerFunction(index, ConfigHandler:sectionHandler) {
+    SetArrayCell(rg_hPropListHandlers, index, sectionHandler, 1);
+}
+
+// Returns the plugin for this specific config handler.
+Handle:GetConfigHandlerPlugin(index) {
+    return Handle:GetArrayCell(rg_hPropListHandlers, index);
+}
+
+// Returns a ConfigHandler function reference.
+ConfigHandler:GetConfigHandlerFunction(index) {
+    return GetArrayCell(rg_hPropListHandlers, index, 1);
+}
+
 
 /**
  * Creates a minimal base proplist file.  This should probably be its own file.
@@ -856,6 +962,7 @@ SetupDefaultProplistFile(const String:sConfigPath[]) {
     //Phew...glad thats over with.
     CloseHandle(hKVBuildProplist);
 }
+
 
 /**
  * Methods to add and remove props from the prop list and provide access to the underlying arrays.
@@ -900,6 +1007,7 @@ public Native_RemoveModelData(Handle:plugin, numParams) {
     RemoveModelData(nModelIndex);
 }
 
+
 /**
  * Native methods to get copies of array handles.
  */
@@ -912,12 +1020,14 @@ public Native_GetModelPathsArray(Handle:plugin, numParams) {
     return _:CloneHandle(Handle:g_hModelPaths);
 }
 
+
 /**
  * Native-exposed method to get a random prop index for convenience.
  */
 public Native_GetRandomPropIndex(Handle:plugin, numParams) {
     return GetRandomInt(0, GetArraySize(g_hModelNames) - 1);
 }
+
 
 /**
  * Library stuff.
@@ -935,6 +1045,7 @@ public OnLibraryAdded(const String:name[]) {
         OnAdminMenuReady(topmenu);
     }
 }
+
 
 /**
  * Admin menu handling.
@@ -1002,6 +1113,7 @@ public MenuHandler_Players(Handle:menu, MenuAction:action, param1, param2) {
         }
     }
 }
+
 
 /**
  * Method that checks for convar changes.
