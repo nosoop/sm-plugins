@@ -18,7 +18,7 @@
 #include <tf2_stocks>
 #include <propify>
 
-#define PLUGIN_VERSION          "2.2.2"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.3.0"     // Plugin version.  Am I doing semantic versioning right?
 
                                             // In humiliation...
 #define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
@@ -36,12 +36,12 @@ public Plugin:myinfo = {
 new Handle:Cvar_AdminFlag = INVALID_HANDLE;
 
 // ConVars and junk.  For references, see OnPluginStart().
-new Handle:g_hCPluginEnabled = INVALID_HANDLE,      bool:g_bPluginEnabled;      // sm_propbonus_enabled
-new Handle:g_hCAdminOnly = INVALID_HANDLE,          bool:g_bAdminOnly;          // sm_propbonus_adminonly
-new Handle:g_hCAnnouncePropRound = INVALID_HANDLE,  bool:g_bAnnouncePropRound;  // sm_propbonus_announcement
-new Handle:g_hCDmgUnprops = INVALID_HANDLE,         g_iDmgUnprops;              // sm_propbonus_damageunprops
-new Handle:g_hCHumiliationRespawn = INVALID_HANDLE, bool:g_bHumiliationRespawn; // sm_propbonus_forcespawn
-new Handle:g_hCTargetRound = INVALID_HANDLE,        Float:g_fTargetRound;       // sm_propbonus_targetroundchance    
+new Handle:g_hCPluginEnabled = INVALID_HANDLE,      bool:g_bPluginEnabled,      // sm_propbonus_enabled
+    Handle:g_hCAdminOnly = INVALID_HANDLE,          bool:g_bAdminOnly,          // sm_propbonus_adminonly
+    Handle:g_hCAnnouncePropRound = INVALID_HANDLE,  bool:g_bAnnouncePropRound,  // sm_propbonus_announcement
+    Handle:g_hCDmgUnprops = INVALID_HANDLE,         g_iDmgUnprops,              // sm_propbonus_damageunprops
+    Handle:g_hCHumiliationRespawn = INVALID_HANDLE, bool:g_bHumiliationRespawn, // sm_propbonus_forcespawn
+    Handle:g_hCTargetRound = INVALID_HANDLE,        Float:g_fTargetRound;       // sm_propbonus_targetroundchance    
 
 // Check plugin-controlled glow state.
 new bool:g_bIsPlayerGlowing[MAXPLAYERS + 1];
@@ -73,6 +73,8 @@ enum BonusRoundMode {
     BonusRoundMode_Normal = 0,
     BonusRoundMode_TargetPractice = 1
 };
+
+new Handle:rg_SpawnPositions;
 
 public OnPluginStart() {
     CheckGame();
@@ -110,6 +112,17 @@ public OnPluginStart() {
     AutoExecConfig(true, "plugin.propifyendround");
     
     Propify_OnPropListLoaded();
+    
+    rg_SpawnPositions = CreateArray(5);
+    Propify_RegisterConfigHandler("spawnpos", ConfigHandler_SpawnPositions);
+}
+
+public OnPluginEnd() {
+    Propify_UnregisterConfigHandlers();
+}
+
+public Propify_OnPropListCleared() {
+    ClearArray(rg_SpawnPositions);
 }
 
 public Propify_OnPropListLoaded() {
@@ -125,6 +138,25 @@ public Propify_OnPropListLoaded() {
             g_bTargetPracticeAvailable &= (rg_iClassModels[i] > -1);
         }
     }
+}
+
+// ConfigHandler -- reads key "x y z" and angle "yaw" to spawn in
+public ConfigHandler_SpawnPositions(const String:key[], const String:value[]) {
+    new String:sSpawnCoords[3][12];
+    ExplodeString(key, " ", sSpawnCoords, sizeof(sSpawnCoords), sizeof(sSpawnCoords[]));
+    
+    new String:sSpawnAngs[2][12];
+    ExplodeString(value, " ", sSpawnAngs, sizeof(sSpawnAngs), sizeof(sSpawnAngs[]));
+    
+    new Float:iSpawnCoords[5];  // x y z pitch yaw
+    iSpawnCoords[0] = StringToFloat(sSpawnCoords[0]);
+    iSpawnCoords[1] = StringToFloat(sSpawnCoords[1]);
+    iSpawnCoords[2] = StringToFloat(sSpawnCoords[2]);
+    
+    iSpawnCoords[3] = StringToFloat(sSpawnAngs[0]);
+    iSpawnCoords[4] = StringToFloat(sSpawnAngs[1]);
+    
+    PushArrayArray(rg_SpawnPositions, iSpawnCoords);
 }
 
 HookPropBonusRoundPluginEvents(bool:bHook) {
@@ -204,7 +236,7 @@ public Action:Timer_EquipProps(Handle:timer) {
     for (new x = 1; x <= MaxClients; x++) {
         new bool:bClientJustRespawned;
         
-        if(!IsClientInGame(x)) {
+        if(!IsClientInGame(x) || IsFakeClient(x)) {
             continue;
         }
         
@@ -225,6 +257,7 @@ public Action:Timer_EquipProps(Handle:timer) {
         if (!IsPlayerAlive(x)) {
             if (g_bHumiliationRespawn) {
                 TF2_RespawnPlayer(x);
+                TeleportToRandomSpawnLocation(x);
                 // bClientJustRespawned = true;
                 // Player will not be in third-person by default.
             }
@@ -247,6 +280,22 @@ public Action:Timer_EquipProps(Handle:timer) {
         }
     }
     return Plugin_Handled;
+}
+
+TeleportToRandomSpawnLocation(client) {
+    new spawnLocationCount = GetArraySize(rg_SpawnPositions);
+    if (GetArraySize(rg_SpawnPositions) == 0) {
+        return;
+    }
+    
+    new Float:selectedSpawn[5];
+    GetArrayArray(rg_SpawnPositions, GetRandomInt(0, spawnLocationCount - 1), selectedSpawn);
+    
+    new Float:pos[3], Float:ang[3];
+    pos[0] = selectedSpawn[0]; pos[1] = selectedSpawn[1]; pos[2] = selectedSpawn[2];
+    ang[0] = selectedSpawn[3]; ang[1] = selectedSpawn[4];
+    
+    TeleportEntity(client, pos, ang, NULL_VECTOR);
 }
 
 EndRoundPropPlayer(client, bool:bClientJustRespawned, BonusRoundMode:iMode) {
