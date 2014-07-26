@@ -19,11 +19,10 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "3.1.0"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "3.2.0"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
-#define KILLENT_IF_UNHIDABLE    1           // Kill the entity if it is of a class that may emit particle effects.  See [KILLENT_IF_UNHIDABLE].
 
 #define ALPHA_INVIS             0           // Alpha value for completely invisible.
 #define ALPHA_NORMAL            255         // Alpha value for plainly visible.    
@@ -60,6 +59,7 @@ new Handle:g_hIncludePropLists = INVALID_HANDLE;
 // ConVars and junk.  For references, see OnPluginStart().
 new Handle:g_hCPluginEnabled = INVALID_HANDLE,      bool:g_bPluginEnabled;      // sm_propify_enabled
 new Handle:g_hCPropSpeed = INVALID_HANDLE,          g_iPropSpeed;               // sm_propify_forcespeed
+new Handle:g_hCKillIfUnhidable = INVALID_HANDLE,    bool:g_bKillIfUnhidable;    // sm_propify_killentifunhidable
 
 // Boolean flags for prop functions.
 new bool:g_bIsProp[MAXPLAYERS+1],
@@ -108,6 +108,9 @@ public OnPluginStart() {
     
     g_hCPropSpeed = CreateConVar("sm_propify_forcespeed", "0", "Force all props to a specific speed, in an integer representing HU/s.  Setting this to 0 allows props to move at their default class speed.", _, true, 0.0);
     HookConVarChange(g_hCPropSpeed, Cvars_Changed);
+    
+    g_hCKillIfUnhidable = CreateConVar("sm_propify_killentifunhidable", "0", "Force kill wearables that have issues with being set transparent (mainly Unusual hats).", _, true, 0.0, true, 1.0);
+    HookConVarChange(g_hCKillIfUnhidable, Cvars_Changed);
     
     // Command to prop a player.
     RegAdminCmd(PROP_COMMAND, Command_Propplayer, ADMFLAG_SLAY, "sm_prop <#userid|name> [propindex] - toggles prop on a player");
@@ -499,12 +502,10 @@ SetClientOwnedEntVisibility(client, const String:sEntityName[], bool:bVisible, b
     new ent = -1;
     while((ent = FindEntityByClassname(ent, sEntityName)) != -1) {      
         if (GetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity") == client) {
-            #if defined KILLENT_IF_UNHIDABLE
-            if (!bVisible && bKillIfUnhidable) {
+            if (!bVisible && bKillIfUnhidable && g_bKillIfUnhidable) {
                 AcceptEntityInput(ent, "Kill");
                 continue;
             }
-            #endif
             
             // Hide the model by making it invisible.
             SetEntityRenderMode(ent, RENDER_TRANSCOLOR);
@@ -1020,5 +1021,7 @@ public Cvars_Changed(Handle:convar, const String:oldValue[], const String:newVal
         }
     } else if(convar == g_hCPropSpeed) {
         g_iPropSpeed = StringToInt(newValue);
+    } else if (convar == g_hCKillIfUnhidable) {
+        g_bKillIfUnhidable = StringToInt(newValue) != 0;
     }
 }
