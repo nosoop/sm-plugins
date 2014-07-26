@@ -28,6 +28,7 @@ public __pl_propify_SetNTVOptional() {
     MarkNativeAsOptional("Propify_RemoveModelData");
     MarkNativeAsOptional("Propify_GetModelNamesArray");
     MarkNativeAsOptional("Propify_GetModelPathsArray");
+    MarkNativeAsOptional("Propify_GetRandomPropIndex");
 }
 
 /**
@@ -127,3 +128,10 @@ native Handle:Propify_GetModelNamesArray();
  * @return                  A Handle pointing to an adt_array containing model paths.
  */
 native Handle:Propify_GetModelPathsArray();
+
+/**
+ * Calls GetRandomInt to return a random, valid prop index.
+ *
+ * @return                  A random integer representing a valid prop index.
+ */
+native Propify_GetRandomPropIndex();

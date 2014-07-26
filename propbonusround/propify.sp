@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "3.0.2"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "3.1.0"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -136,7 +136,8 @@ public APLRes:AskPluginLoad2(Handle:hMySelf, bool:bLate, String:strError[], iMax
     CreateNative("Propify_RemoveModelData", Native_RemoveModelData);
     CreateNative("Propify_GetModelNamesArray", Native_GetModelNamesArray);
     CreateNative("Propify_GetModelPathsArray", Native_GetModelPathsArray);
-
+    CreateNative("Propify_GetRandomPropIndex", Native_GetRandomPropIndex);
+    
     return APLRes_Success;
 }
 
@@ -898,6 +899,9 @@ public Native_RemoveModelData(Handle:plugin, numParams) {
     RemoveModelData(nModelIndex);
 }
 
+/**
+ * Native methods to get copies of array handles.
+ */
 public Native_GetModelNamesArray(Handle:plugin, numParams) {
     // Strip the tag.  You should be expecting a handle value anyways.
     return _:CloneHandle(Handle:g_hModelNames);
@@ -907,6 +911,12 @@ public Native_GetModelPathsArray(Handle:plugin, numParams) {
     return _:CloneHandle(Handle:g_hModelPaths);
 }
 
+/**
+ * Native-exposed method to get a random prop index for convenience.
+ */
+public Native_GetRandomPropIndex(Handle:plugin, numParams) {
+    return GetRandomInt(0, GetArraySize(g_hModelNames) - 1);
+}
 
 /**
  * Library stuff.
