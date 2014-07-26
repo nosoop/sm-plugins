@@ -18,7 +18,7 @@
 #include <tf2_stocks>
 #include <propify>
 
-#define PLUGIN_VERSION          "2.3.1"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.3.2"     // Plugin version.  Am I doing semantic versioning right?
 
                                             // In humiliation...
 #define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
@@ -32,6 +32,8 @@ public Plugin:myinfo = {
     version = PLUGIN_VERSION,
     url = "https://github.com/nosoop/sm-plugins"
 }
+
+new bool:g_bIsPropifyLoaded;                // Checks whether Propify! is loaded or not.
 
 new Handle:Cvar_AdminFlag = INVALID_HANDLE;
 
@@ -114,11 +116,18 @@ public OnPluginStart() {
     Propify_OnPropListLoaded();
     
     rg_SpawnPositions = CreateArray(5);
-    Propify_RegisterConfigHandler("spawnpos", ConfigHandler_SpawnPositions);
 }
 
 public OnPluginEnd() {
     Propify_UnregisterConfigHandlers();
+}
+
+public OnAllPluginsLoaded() {
+    g_bIsPropifyLoaded = LibraryExists("nosoop-propify");
+    
+    if (g_bIsPropifyLoaded) {
+        Propify_RegisterConfigHandler("spawnpos", ConfigHandler_SpawnPositions);
+    }
 }
 
 public Propify_OnPropListCleared() {
@@ -194,7 +203,7 @@ public OnConfigsExecuted() {
 }
 
 public Hook_PostPlayerHurt(Handle:event, const String:name[], bool:dontBroadcast) {
-    if(!g_bPluginEnabled || !g_bBonusRound || g_iDmgUnprops == UNPROP_DMG_NEVER)
+    if(!IsPluginUsable() || !g_bBonusRound || g_iDmgUnprops == UNPROP_DMG_NEVER)
         return;
     
     new client = GetClientOfUserId(GetEventInt(event, "userid"));
@@ -214,7 +223,7 @@ public Hook_PostPlayerHurt(Handle:event, const String:name[], bool:dontBroadcast
 }
 
 public Hook_PostRoundWin(Handle:event, const String:name[], bool:dontBroadcast) {
-    if(!g_bPluginEnabled)
+    if(!IsPluginUsable())
         return;
 
     g_bBonusRound = true;
@@ -256,7 +265,7 @@ public Action:Timer_EquipProps(Handle:timer) {
             if (g_bHumiliationRespawn) {
                 TF2_RespawnPlayer(x);
                 TeleportToRandomSpawnLocation(x);
-                // bClientJustRespawned = true;
+                bClientJustRespawned = true;
                 // Player will not be in third-person by default.
             }
         }
@@ -324,6 +333,10 @@ SetPlayerGlow(client) {
     g_bIsPlayerGlowing[client] = true;
 }
 
+IsPluginUsable() {
+    return g_bPluginEnabled && g_bIsPropifyLoaded;
+}
+
 CheckGame() {
     new String:strGame[10];
     GetGameFolderName(strGame, sizeof(strGame));
@@ -357,12 +370,24 @@ stock bool:IsValidAdmin(client, const String:flags[]) {
     return false;
 }
 
+public OnLibraryRemoved(const String:name[]) {
+    g_bIsPropifyLoaded &= !StrEqual(name, "nosoop-propify");
+}
+
+public OnLibraryAdded(const String:name[]) {
+    g_bIsPropifyLoaded |= StrEqual(name, "nosoop-propify");
+    
+    if (g_bIsPropifyLoaded) {
+        Propify_RegisterConfigHandler("spawnpos", ConfigHandler_SpawnPositions);
+    }
+}
+
 public Cvars_Changed(Handle:convar, const String:oldValue[], const String:newValue[]) {
     if(convar == g_hCPluginEnabled) {
         g_bPluginEnabled = StringToInt(newValue) != 0;
         HookPropBonusRoundPluginEvents(g_bPluginEnabled);
         
-        if (!g_bPluginEnabled) {
+        if (!g_bPluginEnabled && g_bIsPropifyLoaded) {
             // Unprop and respawn the player when the plugin is disabled dynamically.
             for (new x = 1; x <= MaxClients; x++) {
                 if(IsClientInGame(x) && IsPlayerAlive(x)) {
