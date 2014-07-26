@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "3.3.1"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "3.3.2"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -92,9 +92,6 @@ new Handle:g_hForwardOnPropified,       // Turned a player into a prop or out of
     Handle:g_hForwardOnModelAdded,      // External plugin added a prop.
     Handle:g_hForwardOnModelRemoved;    // External plugin removed a prop.
 
-// Private forward.
-new Handle:g_hPForwardConfigHandler;    // Calls a registered plugin's ConfigHandler method when appropriate.
-
 public OnPluginStart() {
     new String:strGame[10];
     GetGameFolderName(strGame, sizeof(strGame));
@@ -132,9 +129,6 @@ public OnPluginStart() {
     g_hForwardOnPropListLoaded = CreateGlobalForward("Propify_OnPropListLoaded", ET_Ignore);
     g_hForwardOnModelAdded = CreateGlobalForward("Propify_OnModelAdded", ET_Ignore, Param_String, Param_String);
     g_hForwardOnModelRemoved = CreateGlobalForward("Propify_OnModelRemoved", ET_Ignore, Param_String, Param_String);
-    
-    // Create private forwards.
-    g_hPForwardConfigHandler = CreateForward(ET_Ignore, Param_String, Param_String);
     
     // Register own plugin's config handlers.
     RegisterConfigHandler(INVALID_HANDLE, "proplist", ConfigHandler_PropList);
@@ -812,16 +806,9 @@ public SMCResult:Config_NewSection(Handle:parser, const String:section[], bool:q
 }
 
 public SMCResult:Config_KeyValue(Handle:parser, const String:key[], const String:value[], bool:key_quotes, bool:value_quotes) {
-    // Iterate through all the plugins to remove from the forward call.
-    // TODO Optimize by moving what we can to the Config_NewSection method.
-    for (new i = 0; i < GetArraySize(rg_hPropListHandlers); i++) {
-        RemoveAllFromForward(g_hPForwardConfigHandler, GetConfigHandlerPlugin(i));
-    }
-    
-    // Check which section we are in and forward it to an applicable method.
+    // Call the appropriate method.
     if (g_iPropListSection > -1) {
-        AddToForward(g_hPForwardConfigHandler, GetConfigHandlerPlugin(g_iPropListSection), GetConfigHandlerFunction(g_iPropListSection));
-        Call_StartForward(g_hPForwardConfigHandler);
+        Call_StartFunction(GetConfigHandlerPlugin(g_iPropListSection), GetConfigHandlerFunction(g_iPropListSection));
         Call_PushString(key);
         Call_PushString(value);
         Call_Finish();
