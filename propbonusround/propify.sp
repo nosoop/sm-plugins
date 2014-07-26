@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "3.3.0"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "3.3.1"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -87,7 +87,8 @@ new g_nClassesToForceHide = 1;          // The first n entities will be forced h
 
 // Global forwards.
 new Handle:g_hForwardOnPropified,       // Turned a player into a prop or out of one.
-    Handle:g_hForwardOnPropListLoaded,  // Cleared and reloaded model list.
+    Handle:g_hForwardOnPropListCleared, // Cleared existing prop list and starting fresh.
+    Handle:g_hForwardOnPropListLoaded,  // Finished loading model list.
     Handle:g_hForwardOnModelAdded,      // External plugin added a prop.
     Handle:g_hForwardOnModelRemoved;    // External plugin removed a prop.
 
@@ -127,6 +128,7 @@ public OnPluginStart() {
     
     // Create forwards.
     g_hForwardOnPropified = CreateGlobalForward("Propify_OnPropified", ET_Ignore, Param_Cell, Param_Cell);
+    g_hForwardOnPropListCleared = CreateGlobalForward("Propify_OnPropListCleared", ET_Ignore);
     g_hForwardOnPropListLoaded = CreateGlobalForward("Propify_OnPropListLoaded", ET_Ignore);
     g_hForwardOnModelAdded = CreateGlobalForward("Propify_OnModelAdded", ET_Ignore, Param_String, Param_String);
     g_hForwardOnModelRemoved = CreateGlobalForward("Propify_OnModelRemoved", ET_Ignore, Param_String, Param_String);
@@ -707,6 +709,7 @@ public Action:Command_ReloadPropList(client, args) {
     return Plugin_Handled;
 }
 
+
 /**
  * Configuration file work.  "Credit for SMC Parser related code goes to Antithasys!"
  */
@@ -720,6 +723,9 @@ ProcessConfigFile() {
 
     ClearArray(g_hModelNames);
     ClearArray(g_hModelPaths);
+    
+    Call_StartForward(g_hForwardOnPropListCleared);
+    Call_Finish();
 
     // Push a read from the base proplist.
     PushArrayString(g_hIncludePropLists, PROPLIST_BASEFILE);

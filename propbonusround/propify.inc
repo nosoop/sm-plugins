@@ -54,6 +54,12 @@ functag ConfigHandler public(const String:key[], const String:value[]);
 forward Propify_OnPropified(client, propIndex);
 
 /**
+ * Called when the prop list has been cleared.
+ * This is a signal for other plugins that are reading from the prop list to clear their stuff.
+ */
+forward Propify_OnPropListCleared();
+
+/**
  * Called when the prop list has been cleared and populated.
  * Other plugins can start adding new props or readding.
  *
