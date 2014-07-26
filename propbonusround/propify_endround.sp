@@ -18,7 +18,7 @@
 #include <tf2_stocks>
 #include <propify>
 
-#define PLUGIN_VERSION          "2.2.1"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.2.2"     // Plugin version.  Am I doing semantic versioning right?
 
                                             // In humiliation...
 #define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
@@ -57,7 +57,7 @@ new String:g_sCharAdminFlag[32];
 // Special target practice round -- all players are turned into the training targets of their respective class.
 new bool:g_bTargetPracticeAvailable;        // If the special mode is available.  Requires all the prop models to be loaded.
 new rg_iClassModels[9];                     // The indices of the class models in the prop list.
-new String:rg_sClassModelPaths[][] = {      // Paths of models to check for.
+new String:rg_sClassModelPaths[][] = {      // Paths of models to check for, in class ordinal order so we can just pass the player's current class int value imto the array.
     "models/props_training/target_scout.mdl",
     "models/props_training/target_sniper.mdl",
     "models/props_training/target_soldier.mdl",
