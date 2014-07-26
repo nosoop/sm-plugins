@@ -18,7 +18,7 @@
 #include <tf2_stocks>
 #include <propify>
 
-#define PLUGIN_VERSION          "2.3.0"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.3.1"     // Plugin version.  Am I doing semantic versioning right?
 
                                             // In humiliation...
 #define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
@@ -220,12 +220,10 @@ public Hook_PostRoundWin(Handle:event, const String:name[], bool:dontBroadcast) 
     g_bBonusRound = true;
     g_iWinningTeam = TFTeam:GetEventInt(event, "team");
     
-    if (!IsEntLimitReached()) {
-        if (g_bAnnouncePropRound) {
-            PrintToChatAll("\x01* Round-End Prop Hunt is \x04active\x01!");
-        }
-        CreateTimer(0.1, Timer_EquipProps, _, TIMER_FLAG_NO_MAPCHANGE);
+    if (g_bAnnouncePropRound) {
+        PrintToChatAll("\x01* Round-End Prop Hunt is \x04active\x01!");
     }
+    CreateTimer(0.1, Timer_EquipProps, _, TIMER_FLAG_NO_MAPCHANGE);
 }
 
 public Action:Timer_EquipProps(Handle:timer) {
@@ -357,24 +355,6 @@ stock bool:IsValidAdmin(client, const String:flags[]) {
     }
     
     return false;
-}
-
-stock bool:IsEntLimitReached() {
-    new maxents = GetMaxEntities();
-    new i, c = 0;
-    
-    for(i = MaxClients; i <= maxents; i++) {
-        if(IsValidEntity(i))
-            c++;
-    }
-    
-    if (c >= (maxents-32)) {
-        PrintToServer("Warning: Entity limit is nearly reached! Please switch or reload the map!");
-        LogError("Entity limit is nearly reached: %d/%d", c, maxents);
-        return true;
-    } else {
-        return false;
-    }
 }
 
 public Cvars_Changed(Handle:convar, const String:oldValue[], const String:newValue[]) {
