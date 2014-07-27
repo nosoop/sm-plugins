@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "3.3.2"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "3.3.3"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -1006,11 +1006,11 @@ public Native_RemoveModelData(Handle:plugin, numParams) {
  */
 public Native_GetModelNamesArray(Handle:plugin, numParams) {
     // Strip the tag.  You should be expecting a handle value anyways.
-    return _:CloneHandle(Handle:g_hModelNames);
+    return g_hModelNames != INVALID_HANDLE ? (_:CloneHandle(g_hModelNames)) : _:INVALID_HANDLE;
 }
 
 public Native_GetModelPathsArray(Handle:plugin, numParams) {
-    return _:CloneHandle(Handle:g_hModelPaths);
+    return g_hModelPaths != INVALID_HANDLE ? (_:CloneHandle(g_hModelPaths)) : _:INVALID_HANDLE;
 }
 
 

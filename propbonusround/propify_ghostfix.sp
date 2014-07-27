@@ -11,7 +11,7 @@
 #include <sdktools>
 #include <propify>
 
-#define PLUGIN_VERSION          "0.0.7"     // Plugin version.
+#define PLUGIN_VERSION          "0.0.8"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Propify! Ghost Fix",
@@ -29,7 +29,7 @@ new String:g_saGhostModels[][] = {
     "models/props_halloween/candle_cluster.mdl"
 };
 
-public OnPluginStart() {
+public OnAllPluginsLoaded() {
     CheckForGhostModel();
 }
 

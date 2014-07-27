@@ -18,7 +18,7 @@
 #include <tf2_stocks>
 #include <propify>
 
-#define PLUGIN_VERSION          "2.3.2"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.3.3"     // Plugin version.  Am I doing semantic versioning right?
 
                                             // In humiliation...
 #define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
@@ -113,8 +113,6 @@ public OnPluginStart() {
 
     AutoExecConfig(true, "plugin.propifyendround");
     
-    Propify_OnPropListLoaded();
-    
     rg_SpawnPositions = CreateArray(5);
 }
 
@@ -127,6 +125,7 @@ public OnAllPluginsLoaded() {
     
     if (g_bIsPropifyLoaded) {
         Propify_RegisterConfigHandler("spawnpos", ConfigHandler_SpawnPositions);
+        Propify_OnPropListLoaded();
     }
 }
 

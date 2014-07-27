@@ -135,6 +135,7 @@ native Propify_AddModelData(const String:modelName[], const String:modelPath[]);
 /**
  * Gets the handle for the model name array for raw access.
  * Remember to sync additions and removals between the arrays.
+ * The array is not available when the plugin starts.
  *
  * @return                  A Handle pointing to an adt_array containing model names.
  */
@@ -143,6 +144,7 @@ native Handle:Propify_GetModelNamesArray();
 /**
  * Gets the handle for the model path array for raw access.
  * Remember to sync changes between the arrays.
+ * The array is not available when the plugin starts.
  *
  * @return                  A Handle pointing to an adt_array containing model paths.
  */
