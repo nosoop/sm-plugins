@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "3.3.3"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "3.4.0"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -46,16 +46,23 @@ public Plugin:myinfo = {
     url = "https://github.com/nosoop/sm-plugins"
 }
 
-// Function tag for a registerable config handler.
-functag ConfigHandler public(const String:key[], const String:value[]);
-
 new Handle:hAdminMenu = INVALID_HANDLE;
 
 // Arrays for prop models, names, and a list of additional files to load.
-new g_iPropListSection = -1;
+new g_iPropListSection = -1, g_iCurrentPropList;
 new Handle:g_hModelNames = INVALID_HANDLE, Handle:g_hModelPaths = INVALID_HANDLE;
 new Handle:g_hIncludePropLists = INVALID_HANDLE;
+
+// Function tag for a registerable config handler, along with arrays for it.
+functag ConfigHandler public(const String:key[], const String:value[]);
 new Handle:rg_hPropListHandlerSections = INVALID_HANDLE, Handle:rg_hPropListHandlers = INVALID_HANDLE;
+
+// Scope for configuration handlers.
+enum ConfigHandlerScope {
+    ConfigHandler_All = 0,
+    ConfigHandler_Base,
+    ConfigHandler_Map
+};
 
 // ConVars and junk.  For references, see OnPluginStart().
 new Handle:g_hCPluginEnabled = INVALID_HANDLE,      bool:g_bPluginEnabled,      // sm_propify_enabled
@@ -131,8 +138,8 @@ public OnPluginStart() {
     g_hForwardOnModelRemoved = CreateGlobalForward("Propify_OnModelRemoved", ET_Ignore, Param_String, Param_String);
     
     // Register own plugin's config handlers.
-    RegisterConfigHandler(INVALID_HANDLE, "proplist", ConfigHandler_PropList);
-    RegisterConfigHandler(INVALID_HANDLE, "includes", ConfigHandler_IncludeList);
+    RegisterConfigHandler(INVALID_HANDLE, "proplist", ConfigHandler_PropList, ConfigHandler_All);
+    RegisterConfigHandler(INVALID_HANDLE, "includes", ConfigHandler_IncludeList, ConfigHandler_All);
     
     AutoExecConfig(true, "plugin.propify");
 }
@@ -732,9 +739,9 @@ ProcessConfigFile() {
     // Run through all prop lists, importing new ones.
     // Recheck GetArraySize as other files may have been imported.
     new iCurrentPropCount = 0;
-    for (new i = 0; i < GetArraySize(g_hIncludePropLists); i++) {
+    for (g_iCurrentPropList = 0; g_iCurrentPropList < GetArraySize(g_hIncludePropLists); g_iCurrentPropList++) {
         new String:propList[PLATFORM_MAX_PATH];
-        GetArrayString(g_hIncludePropLists, i, propList, sizeof(propList));
+        GetArrayString(g_hIncludePropLists, g_iCurrentPropList, propList, sizeof(propList));
         
         ReadPropConfigurationFile(propList);
         
@@ -802,6 +809,29 @@ public SMCResult:Config_NewSection(Handle:parser, const String:section[], bool:q
     // Select the associated config-handling index based on key.
     g_iPropListSection = FindStringInArray(rg_hPropListHandlerSections, section);
     
+    // If we have an existing handler and it doesn't have global scope, run checks.
+    if (g_iPropListSection > -1 && GetConfigHandlerScope(g_iPropListSection) != ConfigHandler_All) {
+        // Get the name of the current prop file.
+        new String:propList[PLATFORM_MAX_PATH];
+        GetArrayString(g_hIncludePropLists, g_iCurrentPropList, propList, sizeof(propList));
+        
+        // Run scope checks.
+        switch (GetConfigHandlerScope(g_iPropListSection)) {
+            case ConfigHandler_Base: {
+                if (!StrEqual(PROPLIST_BASEFILE, propList)) {
+                    g_iPropListSection = -1;
+                }
+            }
+            case ConfigHandler_Map: {
+                new String:mapName[64];
+                GetCurrentMap(mapName, sizeof(mapName));
+                if (!StrEqual(mapName, propList)) {
+                    g_iPropListSection = -1;
+                }
+            }
+        }
+    }
+    
     return SMCParse_Continue;
 }
 
@@ -845,11 +875,10 @@ public ConfigHandler_IncludeList(const String:key[], const String:value[]) {
 }
 
 // Registers a config handler by plugin, section to register with, and the function to call within the plugin.  Sections can only be associated with one handler at a time.
-// TODO Add the ability to only call the handler for the specific map list.
-RegisterConfigHandler(Handle:plugin = INVALID_HANDLE, const String:sSection[], ConfigHandler:sectionHandler) {
+RegisterConfigHandler(Handle:plugin = INVALID_HANDLE, const String:sSection[], ConfigHandler:sectionHandler, ConfigHandlerScope:handlerScope = ConfigHandler_Map) {
     if (rg_hPropListHandlerSections == INVALID_HANDLE) {
         rg_hPropListHandlerSections = CreateArray(PROPLIST_SECTIONLENGTH);
-        rg_hPropListHandlers = CreateArray(2); // plugin handle, function
+        rg_hPropListHandlers = CreateArray(3); // plugin handle, function, scope
     }
     
     // Only add if no other plugin has registered a handler.
@@ -860,6 +889,7 @@ RegisterConfigHandler(Handle:plugin = INVALID_HANDLE, const String:sSection[], C
         // Push plugin handle into first secrion.
         handlerIndex = PushArrayCell(rg_hPropListHandlers, plugin);
         SetConfigHandlerFunction(handlerIndex, sectionHandler);
+        SetConfigHandlerScope(handlerIndex, handlerScope);
         return handlerIndex;
     }
     return -1;
@@ -915,19 +945,29 @@ RemoveConfigHandler(index) {
     RemoveFromArray(rg_hPropListHandlers, index);
 }
 
+// Returns a ConfigHandler function reference.
+ConfigHandler:GetConfigHandlerFunction(index) {
+    return GetArrayCell(rg_hPropListHandlers, index, 1);
+}
+
 // Helper method to put the ConfigHandler method index into the array (in block 1).
 SetConfigHandlerFunction(index, ConfigHandler:sectionHandler) {
     SetArrayCell(rg_hPropListHandlers, index, sectionHandler, 1);
 }
 
+// Returns a ConfigHandlerScope value.
+ConfigHandlerScope:GetConfigHandlerScope(index) {
+    return GetArrayCell(rg_hPropListHandlers, index, 2);
+}
+
+// Helper method to put the ConfigHandlerScope value into the array (in block 2).
+SetConfigHandlerScope(index, ConfigHandlerScope:handlerScope) {
+    SetArrayCell(rg_hPropListHandlers, index, handlerScope, 2);
+}
+
 // Returns the plugin for this specific config handler.
 Handle:GetConfigHandlerPlugin(index) {
     return Handle:GetArrayCell(rg_hPropListHandlers, index);
-}
-
-// Returns a ConfigHandler function reference.
-ConfigHandler:GetConfigHandlerFunction(index) {
-    return GetArrayCell(rg_hPropListHandlers, index, 1);
 }
 
 

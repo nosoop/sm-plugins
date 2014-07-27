@@ -45,6 +45,15 @@ public __pl_propify_SetNTVOptional() {
 functag ConfigHandler public(const String:key[], const String:value[]);
 
 /**
+ * Types of configuration handlers.
+ */
+enum ConfigHandlerType {
+    ConfigHandler_All = 0,          // Read from all prop lists.
+    ConfigHandler_Base,             // Read exclusively from the base prop list.
+    ConfigHandler_Map               // Read exclusively from the map-specific prop list.
+};
+
+/**
  * Called when a client is turned into a (possibly different) prop, or when they are unpropped.
  *
  * @param client            Client index.
@@ -164,8 +173,9 @@ native Propify_GetRandomPropIndex();
  *
  * @param sSection          The section name to handle.
  * @param sectionHandler    A ConfigHandler method to be called for the key/value pairs in the section.
+ * @param handlerScope      The scope of the handler (i.e., which prop lists the handler is allowed to read from).  Default is reading from the current map.
  */
-native Propify_RegisterConfigHandler(const String:sSection[], ConfigHandler:sectionHandler);
+native Propify_RegisterConfigHandler(const String:sSection[], ConfigHandler:sectionHandler, ConfigHandlerScope:handlerScope = ConfigHandler_Map);
 
 /**
  * Attempts to unregister a ConfigHandler method associated with the specified section name.
