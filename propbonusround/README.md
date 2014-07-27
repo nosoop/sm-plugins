@@ -67,14 +67,14 @@ Prop Bonus Round supports an extra section in the map-specific config.
 ```
 
 ## Ghost Fix
-A simple patch plugin that disables a spooky glow effect that occurs when certain props are picked.
+A simple patch plugin that disables a spooky glow effect that occurs when certain props are used.  This fix isn't included in Propify! as to keep the code clean from hardcoded values.  You might not even use any of the props affected, which would make it kinda pointless.
 
 ## Propify! Plus
-An extension to Propify! intended for those admins that just enjoy turning players into props so much.
+An extension to Propify! intended for those admins that just enjoy turning players into props so much for some reason.
 
 ### Commands
 * `sm_prop_persist <target> <0|1>` Makes the target keep their prop between lives.  Can also be called by `sm_propp`.  
-* `sm_propbyname <target> <propname>` Props a player, using the first prop index containing the specified propname substring.  Can also be called by `sm_propn`.
+* `sm_propbyname <target> <propname>` Props a player, using the first prop index containing the specified propname substring, so you don't have to memorize indices that may change when prop lists update.  Can also be called by `sm_propn`.
 
 ### Target Filters
 * `@props` Targets all propped players.
@@ -83,4 +83,4 @@ An extension to Propify! intended for those admins that just enjoy turning playe
 # Propify! API
 Propify! can be extended to work with other plugins that want to turn players into props.
 
-The documentation is extensive, so refer to the [include file](https://github.com/nosoop/sm-plugins/blob/master/propbonusround/propify.inc) to see how you can work Propify! into your own plugins.
+The documentation is pretty good (and all the other sub-plugins use it themselves), so refer to the [include file](https://github.com/nosoop/sm-plugins/blob/master/propbonusround/propify.inc) to see how you can work Propify! into your own plugins.
