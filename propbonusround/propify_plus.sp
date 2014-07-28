@@ -10,7 +10,7 @@
 #include <sourcemod>
 #include <propify>
 
-#define PLUGIN_VERSION          "0.4.0"     // Plugin version.
+#define PLUGIN_VERSION          "0.5.0"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Propify! Plus",
@@ -36,6 +36,8 @@ public OnPluginStart() {
     RegAdminCmd("sm_propbyname", Command_PropByName, ADMFLAG_SLAY, "sm_propbyname <#userid|name> <prop name> - attempts to force a prop on a player by name");
     RegAdminCmd("sm_propn", Command_PropByName, ADMFLAG_SLAY);
     
+    RegAdminCmd("sm_addprop", Command_AddProp, ADMFLAG_ROOT, "sm_addprop <prop name> <prop path> - temporarily adds a prop to the prop list");
+    
     // Filtering targets by whether they are propped or not.
     AddMultiTargetFilter("@props", TargetFilter_Propify, "all props", false);
     AddMultiTargetFilter("@!props", TargetFilter_Propify, "all not-props", false);
@@ -47,7 +49,7 @@ public Propify_OnPropified(client, propIndex) {
     }
 }
 
-// Marks a player 
+// Marks a player to remain propped.
 public Action:Command_PropPersist(client, args) {
     decl String:target[MAX_TARGET_LENGTH];
     decl String:target_name[MAX_TARGET_LENGTH];
@@ -84,6 +86,22 @@ public Action:Command_PropPersist(client, args) {
     return Plugin_Handled;
 }
 
+public Hook_PostPlayerSpawnReprop(Handle:event, const String:name[], bool:dontBroadcast) {
+    new client = GetClientOfUserId(GetEventInt(event, "userid"));
+    
+    CreateTimer(0.01, Timer_RepropPlayer, client);
+}
+
+public Action:Timer_RepropPlayer(Handle:timer, any:client) {
+    if (g_bPersistPropOnPlayer[client]) {
+        Propify_PropPlayer(client, g_iPersistProp[client]);
+    }
+}
+
+
+/**
+ * Sets a prop on a player by name.
+ */
 public Action:Command_PropByName(client, args) {
     decl String:target_name[MAX_TARGET_LENGTH];
     decl target_list[MAXPLAYERS];
@@ -140,18 +158,29 @@ public Action:Command_PropByName(client, args) {
     return Plugin_Handled;
 }
 
-public Hook_PostPlayerSpawnReprop(Handle:event, const String:name[], bool:dontBroadcast) {
-    new client = GetClientOfUserId(GetEventInt(event, "userid"));
+
+/**
+ * Adds a prop to the prop list.  The prop remains until the prop list is reloaded manually or on map change.
+ */
+public Action:Command_AddProp(client, args) {
+    decl String:propName[32], String:propPath[PLATFORM_MAX_PATH];
     
-    CreateTimer(0.01, Timer_RepropPlayer, client);
-}
-
-public Action:Timer_RepropPlayer(Handle:timer, any:client) {
-    if (g_bPersistPropOnPlayer[client]) {
-        Propify_PropPlayer(client, g_iPersistProp[client]);
+    if (args < 2) {
+        ReplyToCommand(client, "sm_addprop <prop name> <prop path>");
+        return Plugin_Handled;
     }
+    
+    GetCmdArg(1, propName, sizeof(propName));
+    GetCmdArg(2, propPath, sizeof(propPath));
+    
+    Propify_AddModelData(propName, propPath);
+    ReplyToCommand(client, "[SM] Added prop '%s'.", propName);
+    return Plugin_Handled;
 }
 
+/**
+ * Target filters.
+ */
 public bool:TargetFilter_Propify(const String:strPattern[], Handle:hClients) {
     new bool:bInvert = (strPattern[1] == '!');
     

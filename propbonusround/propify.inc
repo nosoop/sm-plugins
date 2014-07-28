@@ -47,7 +47,7 @@ functag ConfigHandler public(const String:key[], const String:value[]);
 /**
  * Types of configuration handlers.
  */
-enum ConfigHandlerType {
+enum ConfigHandlerScope {
     ConfigHandler_All = 0,          // Read from all prop lists.
     ConfigHandler_Base,             // Read exclusively from the base prop list.
     ConfigHandler_Map               // Read exclusively from the map-specific prop list.
