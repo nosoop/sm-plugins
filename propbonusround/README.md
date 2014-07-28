@@ -15,7 +15,6 @@ Propify! is a highly expandable Team Fortress 2 SourceMod plugin.  Many features
 ### Variables
 * `sm_propify_enabled` Whether or not the plugin is enabled.
 * `sm_propify_forcespeed` Forces a specific speed on a prop.
-* `sm_propify_killentifunhidable` If any unhidable entities should be removed on propped players by killing said entities.  Unhidables are mainly hats that could possibly have particle effects applied.  If enabled, wearables may be slightly buggy.  If disabled, particle effects may show on props.
 
 ### Configuring
 Go into `/sourcemod/data/propify/` and take a look at the `base.txt` file.  The config is parsed by the SourceMod Config parser, which uses a format similar to Valve's KeyValues.
