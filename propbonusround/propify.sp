@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "3.4.0"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "3.5.0"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -524,9 +524,16 @@ SetClientOwnedEntVisibility(client, const String:sEntityName[], bool:bVisible, b
                 continue;
             }
             
-            // Hide the model by making it invisible.
+            // Change the model alpha for visibility.
             SetEntityRenderMode(ent, RENDER_TRANSCOLOR);
             SetEntityRenderColor(ent, 255, 255, 255, bVisible ? ALPHA_NORMAL : ALPHA_INVIS);
+            
+            // Set shadow visibility.
+            AcceptEntityInput(ent, bVisible ? "EnableShadow" : "DisableShadow");
+            
+            // Disable any particle effects on wearables.
+            SetVariantString(bVisible ? "ParticleEffectStart" : "ParticleEffectStop");
+            AcceptEntityInput(ent, "DispatchEffect");
         }
     }
 }
