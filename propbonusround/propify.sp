@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "3.5.0"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "3.5.2"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -107,7 +107,7 @@ public OnPluginStart() {
     
     LoadTranslations("common.phrases");
     
-    CreateConVar("sm_propify_version", PLUGIN_VERSION, "Version of Propify!", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY);
+    CreateConVar("sm_propify_version", PLUGIN_VERSION, "Version of Propify!", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_DONTRECORD);
     
     // Create and hook cvars.
     g_hCPluginEnabled = CreateConVar("sm_propify_enabled", "1", "Enable / disable the propify plugin.  Disabling the plugin unprops all propped players.", _, true, 0.0, true, 1.0);
