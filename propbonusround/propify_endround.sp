@@ -18,7 +18,7 @@
 #include <tf2_stocks>
 #include <propify>
 
-#define PLUGIN_VERSION          "2.3.4"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.3.5"     // Plugin version.  Am I doing semantic versioning right?
 
                                             // In humiliation...
 #define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
@@ -213,10 +213,10 @@ public Hook_PostPlayerHurt(Handle:event, const String:name[], bool:dontBroadcast
     }
     
     if (attacker > 0 && attacker == client && g_iDmgUnprops >= UNPROP_DMG_PLAYER) {
-        SetPlayerGlow(true);
+        SetPlayerGlow(client, true);
         PrintToChat(client, "Another player attacked you and made you visible; run!");
     } else if (g_iDmgUnprops >= UNPROP_DMG_ANY) {
-        SetPlayerGlow(true);
+        SetPlayerGlow(client, true);
         PrintToChat(client, "You've taken damage and now the enemy team can see you!");
     }
 }
@@ -330,8 +330,8 @@ public Hook_PostRoundStart(Handle:event, const String:name[], bool:dontBroadcast
     }
 }
 
-SetPlayerGlow(client) {
-    SetEntProp(client, Prop_Send, "m_bGlowEnabled", 1, 1);
+SetPlayerGlow(client, bool:bGlowEnabled) {
+    SetEntProp(client, Prop_Send, "m_bGlowEnabled", _:bGlowEnabled, 1);
     g_bIsPlayerGlowing[client] = true;
 }
 
@@ -404,7 +404,7 @@ public Cvars_Changed(Handle:convar, const String:oldValue[], const String:newVal
             // Set unglow.
             for (new i = 1; i <= MaxClients; i++) {
                 if (IsClientInGame(i))
-                    SetEntProp(i, Prop_Send, "m_bGlowEnabled", 0, 1);
+                    SetPlayerGlow(i, false);
             }
         }
     } else if (convar == g_hCAdminOnly) {
