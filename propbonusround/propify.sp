@@ -66,8 +66,7 @@ enum ConfigHandlerScope {
 
 // ConVars and junk.  For references, see OnPluginStart().
 new Handle:g_hCPluginEnabled = INVALID_HANDLE,      bool:g_bPluginEnabled,      // sm_propify_enabled
-    Handle:g_hCPropSpeed = INVALID_HANDLE,          g_iPropSpeed,               // sm_propify_forcespeed
-    Handle:g_hCKillIfUnhidable = INVALID_HANDLE,    bool:g_bKillIfUnhidable;    // sm_propify_killentifunhidable
+    Handle:g_hCPropSpeed = INVALID_HANDLE,          g_iPropSpeed;               // sm_propify_forcespeed
 
 // Boolean flags for prop functions.
 new bool:g_bIsProp[MAXPLAYERS+1],
@@ -90,7 +89,6 @@ new String:g_saHidableClasses[][] = {
     "tf_wearable_demoshield",           // Demo shields.
     "tf_weapon_spellbook"               // Spellbooks.
 };
-new g_nClassesToForceHide = 1;          // The first n entities will be forced hidden by killing them.
 
 // Global forwards.
 new Handle:g_hForwardOnPropified,       // Turned a player into a prop or out of one.
@@ -117,9 +115,6 @@ public OnPluginStart() {
     
     g_hCPropSpeed = CreateConVar("sm_propify_forcespeed", "0", "Force all props to a specific speed, in an integer representing HU/s.  Setting this to 0 allows props to move at their default class speed.", _, true, 0.0);
     HookConVarChange(g_hCPropSpeed, Cvars_Changed);
-    
-    g_hCKillIfUnhidable = CreateConVar("sm_propify_killentifunhidable", "0", "Force kill wearables that have issues with being set transparent (mainly Unusual hats).", _, true, 0.0, true, 1.0);
-    HookConVarChange(g_hCKillIfUnhidable, Cvars_Changed);
     
     // Command to prop a player.
     RegAdminCmd(PROP_COMMAND, Command_Propplayer, ADMFLAG_SLAY, "sm_prop <#userid|name> [propindex] - toggles prop on a player");
@@ -501,7 +496,7 @@ HidePlayerItemsAndDoPropStuff(client) {
  */
 SetWearableVisinility(client, bool:bVisible) {
     for (new i = 0; i < sizeof(g_saHidableClasses); i++) {
-        SetClientOwnedEntVisibility(client, g_saHidableClasses[i], bVisible, i < g_nClassesToForceHide);
+        SetClientOwnedEntVisibility(client, g_saHidableClasses[i], bVisible);
     }
 }
 
@@ -513,17 +508,11 @@ SetWearableVisinility(client, bool:bVisible) {
  * @param client            The client whose child entity needs removing.
  * @param sEntityName       The class name of the item?  Client-side.
  * @param bVisible          If the item should be made visible or invisible.
- * @param bKillIfUnhidable  Kills the entity if it needs to be hidden and the compile flag is defined.
  */
-SetClientOwnedEntVisibility(client, const String:sEntityName[], bool:bVisible, bool:bKillIfUnhidable = false) {
+SetClientOwnedEntVisibility(client, const String:sEntityName[], bool:bVisible) {
     new ent = -1;
     while((ent = FindEntityByClassname(ent, sEntityName)) != -1) {      
         if (GetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity") == client) {
-            if (!bVisible && bKillIfUnhidable && g_bKillIfUnhidable) {
-                AcceptEntityInput(ent, "Kill");
-                continue;
-            }
-            
             // Change the model alpha for visibility.
             SetEntityRenderMode(ent, RENDER_TRANSCOLOR);
             SetEntityRenderColor(ent, 255, 255, 255, bVisible ? ALPHA_NORMAL : ALPHA_INVIS);
@@ -531,7 +520,7 @@ SetClientOwnedEntVisibility(client, const String:sEntityName[], bool:bVisible, b
             // Set shadow visibility.
             AcceptEntityInput(ent, bVisible ? "EnableShadow" : "DisableShadow");
             
-            // Disable any particle effects on wearables.
+            // Toggle any particle effects on wearables.
             SetVariantString(bVisible ? "ParticleEffectStart" : "ParticleEffectStop");
             AcceptEntityInput(ent, "DispatchEffect");
         }
@@ -1173,7 +1162,5 @@ public Cvars_Changed(Handle:convar, const String:oldValue[], const String:newVal
         }
     } else if(convar == g_hCPropSpeed) {
         g_iPropSpeed = StringToInt(newValue);
-    } else if (convar == g_hCKillIfUnhidable) {
-        g_bKillIfUnhidable = StringToInt(newValue) != 0;
     }
 }
