@@ -18,7 +18,7 @@
 #include <tf2_stocks>
 #include <propify>
 
-#define PLUGIN_VERSION          "2.3.3"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.3.4"     // Plugin version.  Am I doing semantic versioning right?
 
                                             // In humiliation...
 #define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
@@ -318,6 +318,9 @@ EndRoundPropPlayer(client, bool:bClientJustRespawned, BonusRoundMode:iMode) {
 }
 
 public Hook_PostRoundStart(Handle:event, const String:name[], bool:dontBroadcast) {
+    // Not humiliation anymore.
+    g_bBonusRound = false;
+
     // Set unglow on all players that have glow set by the plugin.
     for (new i = 1; i <= MaxClients; i++) {
         if (IsClientInGame(i) && g_bIsPlayerGlowing[i]) {
