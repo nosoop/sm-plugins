@@ -3,7 +3,7 @@
 #include <sourcemod>
 #include <tf2_stocks>
 
-#define PL_VERSION "1.0.2"
+#define PL_VERSION "1.0.3"
 
 public Plugin:myinfo = {
     name = "[TF2] Queue Class Change",
@@ -14,14 +14,14 @@ public Plugin:myinfo = {
 }
 
 // Puts classes in TF2-style order.
-new TFClassType:g_iMenuToClass[9] = {
+new TFClassType:g_iMenuToClass[] = {
     TFClass_Scout,      TFClass_Soldier,    TFClass_Pyro,
     TFClass_DemoMan,    TFClass_Heavy,      TFClass_Engineer,
     TFClass_Medic,      TFClass_Sniper,     TFClass_Spy
 };
 
 // Class strings in TF2-style order.
-new String:rg_sMenuToString[9][10] = {
+new String:rg_sMenuToString[][] = {
     "Scout",            "Soldier",          "Pyro",
     "Demoman",          "Heavy",            "Engineer",
     "Medic",            "Sniper",           "Spy"
