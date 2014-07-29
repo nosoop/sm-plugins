@@ -11,7 +11,7 @@
 #include <sdktools>
 #include <propify>
 
-#define PLUGIN_VERSION          "0.0.8"     // Plugin version.
+#define PLUGIN_VERSION          "0.0.9"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Propify! Ghost Fix",
@@ -33,7 +33,7 @@ public OnAllPluginsLoaded() {
     CheckForGhostModel();
 }
 
-public OnPropListLoaded() {
+public Propify_OnPropListLoaded() {
     CheckForGhostModel();
 }
 
