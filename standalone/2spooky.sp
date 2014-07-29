@@ -8,7 +8,7 @@
 #include <sdktools>
 #include <sdkhooks>
 
-#define PLUGIN_VERSION          "0.1.0"     // Plugin version.
+#define PLUGIN_VERSION          "0.1.1"     // Plugin version.
 
 #define TIME_EYELANDER_MEAN     60.0        // Final: 60.0
 #define TIME_EYELANDER_DEV      10.0        // Final: 10.0
@@ -42,14 +42,15 @@ public OnMapStart() {
     WelcomeToHell();
     SetDarkness();
     
-    CreateTimer(GetRandomFloatDeviation(TIME_EYELANDER_MEAN, TIME_EYELANDER_DEV), Timer_PlayEyelanderNoise);
-    CreateTimer(GetRandomFloatDeviation(TIME_UNDERWORLD_MEAN, TIME_UNDERWORLD_DEV), Timer_PlayUnderworldNoise);
-    CreateTimer(GetRandomFloatDeviation(90.0, 10.0), Timer_RandomDamage);
+    CreateTimer(GetRandomFloatDeviation(TIME_EYELANDER_MEAN, TIME_EYELANDER_DEV), Timer_PlayEyelanderNoise, TIMER_FLAG_NO_MAPCHANGE);
+    CreateTimer(GetRandomFloatDeviation(TIME_UNDERWORLD_MEAN, TIME_UNDERWORLD_DEV), Timer_PlayUnderworldNoise, TIMER_FLAG_NO_MAPCHANGE);
+    CreateTimer(GetRandomFloatDeviation(90.0, 10.0), Timer_RandomDamage, TIMER_FLAG_NO_MAPCHANGE);
 }
 
 public Hook_PostRoundStart(Handle:event, const String:name[], bool:dontBroadcast) {
     SetDarkness();
 }
+
 
 public Action:Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast) {
     new client = GetClientOfUserId(GetEventInt(event, "userid"));
@@ -66,10 +67,16 @@ public Action:Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroa
         // Apply Skybox Fog End
         SetEntPropFloat(client, Prop_Send, "m_skybox3d.fog.end", 20.0);
         
-        SetPlayerBlindness(client, 220);
+        SetPlayerBlindness(client, 0);
+        CreateTimer(0.01, Timer_SetPlayerBlindness, client);
     }
     return Plugin_Continue;
 }
+
+public Action:Timer_SetPlayerBlindness(Handle:timer, any:client) {
+    SetPlayerBlindness(client, 192);
+}
+
 
 SetDarkness() {
     // Fog taken from themes plugin https://forums.alliedmods.net/showthread.php?t=105608
@@ -155,7 +162,9 @@ public Action:Timer_RandomDamage(Handle:data) {
         SDKHooks_TakeDamage(client, 0, 0, 0.01, DMG_BULLET);
     }
     
-    CreateTimer(GetRandomFloatDeviation(30.0, 5.0), Timer_RandomDamage);
+    if (GetClientCount(true) > 0) {
+        CreateTimer(GetRandomFloatDeviation(30.0, 5.0), Timer_RandomDamage, TIMER_FLAG_NO_MAPCHANGE);
+    }
 }
 
 public WelcomeToHell() {
@@ -203,20 +212,24 @@ PrecacheNoises() {
 public Action:Timer_PlayEyelanderNoise(Handle:data) {
     if (GetClientCount(true) > 0) {
         PlayRandomSoundToClient(GetRandomClient(), g_sSoundEyelander, sizeof(g_sSoundEyelander), 0.5, 0.8);
+        
+        CreateTimer(GetRandomFloatDeviation(TIME_EYELANDER_MEAN, TIME_EYELANDER_DEV), Timer_PlayEyelanderNoise, TIMER_FLAG_NO_MAPCHANGE);
     }
-    
-    CreateTimer(GetRandomFloatDeviation(TIME_EYELANDER_MEAN, TIME_EYELANDER_DEV), Timer_PlayEyelanderNoise);
 }
 
 public Action:Timer_PlayUnderworldNoise(Handle:data) {
-    if (GetClientCount(true) > 0 && GetRandomFloat() < 0.8) {
-        PlayRandomSoundToClient(GetRandomClient(), g_sSoundUnderworld, sizeof(g_sSoundUnderworld), 0.1, 0.3);
+    if (GetClientCount(true) > 0) {
+        if (GetRandomFloat() < 0.8) {
+            PlayRandomSoundToClient(GetRandomClient(), g_sSoundUnderworld, sizeof(g_sSoundUnderworld), 0.1, 0.3);
+        }
+        CreateTimer(GetRandomFloatDeviation(TIME_UNDERWORLD_MEAN, TIME_UNDERWORLD_DEV), Timer_PlayUnderworldNoise, TIMER_FLAG_NO_MAPCHANGE);
     }
-
-    CreateTimer(GetRandomFloatDeviation(TIME_UNDERWORLD_MEAN, TIME_UNDERWORLD_DEV), Timer_PlayUnderworldNoise);
 }
 
 PlayRandomSoundToClient(client, const String:soundFiles[][], nSoundFiles, Float:minVolume, Float:maxVolume) {
+    if (!IsValidClient(client)) {
+        return;
+    }
     decl String:soundName[PLATFORM_MAX_PATH];
     
     strcopy(soundName, sizeof(soundName), soundFiles[GetRandomInt(0, nSoundFiles - 1)]);
