@@ -8,7 +8,7 @@
 #include <sdktools>
 #include <sdkhooks>
 
-#define PLUGIN_VERSION          "0.1.1"     // Plugin version.
+#define PLUGIN_VERSION          "0.1.2"     // Plugin version.
 
 #define TIME_EYELANDER_MEAN     60.0        // Final: 60.0
 #define TIME_EYELANDER_DEV      10.0        // Final: 10.0
@@ -74,7 +74,7 @@ public Action:Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroa
 }
 
 public Action:Timer_SetPlayerBlindness(Handle:timer, any:client) {
-    SetPlayerBlindness(client, 192);
+    // SetPlayerBlindness(client, 192);
 }
 
 
@@ -95,11 +95,11 @@ SetDarkness() {
         AcceptEntityInput(ent, "SetColorSecondary");
         
         // Apply Fog Start
-        SetVariantFloat(-10.0);
+        SetVariantFloat(-2000.0);
         AcceptEntityInput(ent, "SetStartDist");
         
         // Apply Fog End
-        SetVariantFloat(300.0);
+        SetVariantFloat(400.0);
         AcceptEntityInput(ent, "SetEndDist");
         
         // Apply Fog Density
