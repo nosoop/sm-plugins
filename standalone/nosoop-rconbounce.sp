@@ -7,7 +7,7 @@
 #include <sourcemod>
 #include <smrcon>
 
-#define PLUGIN_VERSION          "1.0.0"     // Plugin version.
+#define PLUGIN_VERSION          "1.0.1"     // Plugin version.
 
 // Configuration file name.
 #define CONFIG_NAME             "configs/rconbounce.cfg"
@@ -69,20 +69,23 @@ public Action:SMRCon_OnAuth(rconId, const String:address[], const String:passwor
 
 public Action:SMRCon_OnLog(rconId, const String:address[], const String:logdata[]) {
     new Action:result = Plugin_Continue;
-    decl String:savedPassword[RCON_PASSWORD_LENGTH];
-    savedPassword = sessionPasswords[GetRconSessionIndex(rconId)];
+    new sessionIndex = GetRconSessionIndex(rconId);
     
-    new bool:bAccess = KvJumpToKey(keyValues, savedPassword);
-    if (bAccess) {
-        new bLog = KvGetNum(keyValues, CONFIGKEY_NOLOG, 0);
+    if (sessionIndex > -1) {
+        decl String:savedPassword[RCON_PASSWORD_LENGTH];
+        savedPassword = sessionPasswords[sessionIndex];
         
-        if (bLog > 0) {
-            result = Plugin_Handled;
+        new bool:bAccess = KvJumpToKey(keyValues, savedPassword);
+        if (bAccess) {
+            new bLog = KvGetNum(keyValues, CONFIGKEY_NOLOG, 0);
+            
+            if (bLog > 0) {
+                result = Plugin_Handled;
+            }
         }
+        KvRewind(keyValues);
     }
-    KvRewind(keyValues);
-    
-    return Plugin_Continue;
+    return result;
 }
 
 bool:HasRconAccess(const String:address[], const String:password[]) {
