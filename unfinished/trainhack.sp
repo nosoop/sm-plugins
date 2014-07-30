@@ -5,7 +5,7 @@
 #include <sdkhooks>
 
 // Global definitions
-#define PLUGIN_VERSION "1.0.0"
+#define PLUGIN_VERSION "1.0.1"
 #define MAX_FILE_LEN 80
 
 // Cvar handler and related thing.
@@ -38,11 +38,12 @@ public OnPluginStart() {
 
 public OnMapStart() {
     if (bTrainModEnabled) {
-        new entIndex = -2;
-        while ((entIndex = FindEntityByClassname(entIndex + 1, "func_tracktrain")) != -1) {
-            new m_maxSpeed = GetEntProp(entIndex, Prop_Data, "m_maxSpeed");
+        new entIndex = -1;
+        while ((entIndex = FindEntityByClassname(entIndex, "func_tracktrain")) != -1) {
+            DispatchKeyValueFloat(entIndex, "startspeed", 1200.0);
+            DispatchKeyValueFloat(entIndex, "ManualDecelSpeed", 400.0);
             
-            LogMessage("Max speed of train: %f.", m_maxSpeed);
+            
         }
     }
 }
