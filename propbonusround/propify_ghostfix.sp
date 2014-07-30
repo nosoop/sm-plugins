@@ -11,7 +11,7 @@
 #include <sdktools>
 #include <propify>
 
-#define PLUGIN_VERSION          "0.0.9"     // Plugin version.
+#define PLUGIN_VERSION          "0.0.10"    // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Propify! Ghost Fix",
@@ -29,10 +29,6 @@ new String:g_saGhostModels[][] = {
     "models/props_halloween/candle_cluster.mdl"
 };
 
-public OnAllPluginsLoaded() {
-    CheckForGhostModel();
-}
-
 public Propify_OnPropListLoaded() {
     CheckForGhostModel();
 }
@@ -42,6 +38,7 @@ CheckForGhostModel() {
     new Handle:hModelPaths = Propify_GetModelPathsArray();
     
     g_bGhostFixRequired = false;
+    
     for (new i = 0; i < sizeof(g_saGhostModels); i++) {
         g_bGhostFixRequired = g_bGhostFixRequired || FindStringInArray(hModelPaths, g_saGhostModels[i]) > -1;
     }
