@@ -18,7 +18,7 @@
 #include <tf2_stocks>
 #include <propify>
 
-#define PLUGIN_VERSION          "2.3.5"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.3.6"     // Plugin version.  Am I doing semantic versioning right?
 
                                             // In humiliation...
 #define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
@@ -243,6 +243,12 @@ public Action:Timer_EquipProps(Handle:timer) {
         new bool:bClientJustRespawned;
         
         if(!IsClientInGame(x) || IsFakeClient(x)) {
+            continue;
+        }
+        
+        // Prevent turning ghosts or soon-to-be ghosts into props.
+        if (TF2_IsPlayerInCondition(x, TFCond_HalloweenInHell) ||
+                TF2_IsPlayerInCondition(x, TFCond_HalloweenGhostMode)) {
             continue;
         }
         
