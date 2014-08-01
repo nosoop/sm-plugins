@@ -6,7 +6,7 @@ First off, compile Propify! with your basic SourceMod compiler.  It doesn't requ
 Drop it into your plugins folder and load.  Same with all the other plugins.
 
 ## Propify!
-Propify! is a highly expandable Team Fortress 2 SourceMod plugin.  Many features have been abstracted and exposed for other plugins to use.
+Propify! is a highly expandable Team Fortress 2 SourceMod plugin.  Many features have been abstracted and exposed for other plugins to use.  It comes with the most basic command to turn people into props.
 
 ### Commands
 * `sm_prop <target> <propindex>` Turns a player(s) into a prop or unprops them.  Prop index is determined by which order the props are loaded.
@@ -57,7 +57,7 @@ The Prop Bonus Round-specific plugin code has been made separate from Propify!  
 ### Configuring
 Prop Bonus Round supports an extra section in the map-specific config.
 ```
-// Spawn position.  Dead props get respawned at one of the following locations if any exist.
+// Spawn position.  Dead props get respawned at one of the following locations if any exist and if forcespawn is enabled.
 "spawnpos" {
     // The key represents position coordinates, in space-delimited float values.
     // The value represents the pitch and yaw angles in that order, also in space-delimited floats.
@@ -69,11 +69,12 @@ Prop Bonus Round supports an extra section in the map-specific config.
 A simple patch plugin that disables a spooky glow effect that occurs when certain props are used.  This fix isn't included in Propify! as to keep the code clean from hardcoded values.  You might not even use any of the props affected, which would make it kinda pointless.
 
 ## Propify! Plus
-An extension to Propify! intended for those admins that just enjoy turning players into props so much for some reason.
+An extension to Propify! intended for those admins that just enjoy turning players into props so much for some reason.  Includes an enhanced propifying command among other goodies.
 
 ### Commands
 * `sm_prop_persist <target> <0|1>` Makes the target keep their prop between lives.  Can also be called by `sm_propp`.  
 * `sm_propbyname <target> <propname>` Props a player, using the first prop index containing the specified propname substring, so you don't have to memorize indices that may change when prop lists update.  Can also be called by `sm_propn`.
+* `sm_addprop <name> <models/path/to/file.mdl>` Temporarily adds a prop to the prop list.  It's removed when the the prop list is reloaded.
 
 ### Target Filters
 * `@props` Targets all propped players.
