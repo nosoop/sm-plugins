@@ -16,6 +16,8 @@
 #define CONFIGKEY_NOLOG         "nolog"     // Reads the value as a number to determine whether or not to log the command.
 #define CONFIGKEY_ADDRESS       "address"   // Reads as a String value and is compared to the connecting IP to determine whether or not authentication is accepted.
 #define CONFIGKEY_NOTES         "notes"     // Not read.
+#define CONFIGKEY_CMDLIST       "cmdlist"   // Reads a semicolon-separated list of commands.
+#define CONFIGKEY_WHITELIST     "whitelist" // Whether or not the command list is a whitelist (it's a blacklist by default).
 
 #define RCON_MAX_CONNECTIONS    10          // Maximum number of alive connections to rcon before previous sessions are overwritten.
 #define RCON_PASSWORD_LENGTH    64          // Maximum length of an rcon password.
@@ -49,6 +51,7 @@ public OnMapStart() {
 public Action:Command_ReloadConfig(client, args) {
     ReloadConfig();
     ReplyToCommand(client, "[RCON Bouncer] Reloaded config.");
+    return Plugin_Handled;
 }
 
 public Action:SMRCon_OnAuth(rconId, const String:address[], const String:password[], &bool:allow) {
@@ -88,6 +91,63 @@ public Action:SMRCon_OnLog(rconId, const String:address[], const String:logdata[
     return result;
 }
 
+public Action:SMRCon_OnCommand(rconId, const String:address[], const String:command[], &bool:allow) {
+    // If it's already been dropped then don't bother checking.
+    if (!allow) {
+        return Plugin_Changed;
+    }
+
+    new sessionIndex = GetRconSessionIndex(rconId);
+    if (sessionIndex > -1) {
+        decl String:savedPassword[RCON_PASSWORD_LENGTH];
+        savedPassword = sessionPasswords[sessionIndex];
+        
+        new bool:bAccess = KvJumpToKey(keyValues, savedPassword);
+        if (bAccess) {
+            // TODO Strip quotes off the command.
+            new String:commandArg[2048];
+            strcopy(commandArg, sizeof(commandArg), command);
+            StripQuotes(commandArg);
+        
+            // TODO Detect when there is more than one command.
+            // Get the command name of the first argument.
+            decl String:cmd[64];
+            SplitString(command, " ", cmd, sizeof(cmd));
+            
+            new String:cmds[128][32];
+            new cmdCount = ExplodeCommandString(commandArg, cmds, sizeof(cmds), sizeof(cmds[]));
+            
+            // 128 commands, 32 characters each maximum.
+            new String:filterCmds[128][32];
+            new filterCmdCount = ExplodeFilterString(filterCmds, sizeof(filterCmds), sizeof(filterCmds[]));
+            
+            // Are we only accepting WL'd commands?
+            new bool:whitelistCmds = KvGetNum(keyValues, CONFIGKEY_WHITELIST, 0) > 0;
+
+            new bool:done = false;
+            
+            allow = true;
+            for (new c = 0; c < cmdCount && !done; c++) {
+                // Ignore empty strings.
+                if (strlen(cmds[c]) == 0) {
+                    continue;
+                }
+            
+                for (new i = 0; i < filterCmdCount && !done; i++) {
+                    // If blacklisting, array contains the command != false, then drop
+                    // If whitelisting, array contains the command != true, also drop
+                    if (StrEqual(cmds[c], filterCmds[i]) != whitelistCmds) {
+                        allow = !allow;
+                        done = true;
+                    }
+                }
+            }
+        }
+    }
+    KvRewind(keyValues);
+    return Plugin_Changed;
+}
+
 bool:HasRconAccess(const String:address[], const String:password[]) {
     new bool:bAccess = KvJumpToKey(keyValues, password);
     
@@ -112,6 +172,27 @@ ReloadConfig() {
     keyValues = CreateKeyValues("rconbounce");
     FileToKeyValues(keyValues, sConfigFullPath);
     KvRewind(keyValues);
+}
+
+// Naive approach:  Separate assumed commands by semicolon, trim and retrieve the 0th argument.
+ExplodeCommandString(const String:command[], String:cmdList[][], cmdListSize, cmdSizes) {
+    new commandCount = ExplodeString(command, ";", cmdList, cmdListSize, cmdSizes);
+    
+    for (new i = 0; i < commandCount; i++) {
+        // Take out excessive whitespace.
+        TrimString(cmdList[i]);
+        
+        SplitString(cmdList[i], " ", cmdList[i], cmdSizes);
+    }
+    
+    return commandCount;
+}
+
+ExplodeFilterString(String:cmdFilter[][], cmdFilterSize, cmdSizes) {
+    new String:cmdValue[255];
+    KvGetString(keyValues, CONFIGKEY_CMDLIST, cmdValue, sizeof(cmdValue));
+    
+    return ExplodeString(cmdValue, ";", cmdFilter, cmdFilterSize, cmdSizes);
 }
 
 GetRconSessionIndex(rconId) {
