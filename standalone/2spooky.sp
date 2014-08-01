@@ -74,7 +74,7 @@ public Action:Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroa
 }
 
 public Action:Timer_SetPlayerBlindness(Handle:timer, any:client) {
-    // SetPlayerBlindness(client, 192);
+    SetPlayerBlindness(client, 160);
 }
 
 
