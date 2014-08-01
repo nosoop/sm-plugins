@@ -7,7 +7,7 @@
 #include <sourcemod>
 #include <smrcon>
 
-#define PLUGIN_VERSION          "1.0.1"     // Plugin version.
+#define PLUGIN_VERSION          "1.1.0"     // Plugin version.
 
 // Configuration file name.
 #define CONFIG_NAME             "configs/rconbounce.cfg"
