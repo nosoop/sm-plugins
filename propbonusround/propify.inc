@@ -167,9 +167,9 @@ native Handle:Propify_GetModelPathsArray();
 native Propify_GetRandomPropIndex();
 
 /**
- * Attempts to register a ConfigHandler method to be fired when in a specified section of the prop config.
- * Fails to register if there is already a handler associated with the section name.
- * Remember to unregister them when unloading the plugin.
+ * Attempts to register a ConfigHandler method to be called when SMC is in the specified section of the prop config.
+ * Fails to register if there is already a handler associated with the section name, no matter the scope.
+ * Remember to unregister them when unloading the plugin and to reregister them when Propify! is loaded.
  *
  * @param sSection          The section name to handle.
  * @param sectionHandler    A ConfigHandler method to be called for the key/value pairs in the section.
