@@ -7,8 +7,9 @@
 #include <sourcemod>
 #include <sdktools>
 #include <propify>
+#include <sdkhooks>
 
-#define PLUGIN_VERSION          "0.1.0"     // Plugin version.
+#define PLUGIN_VERSION          "0.2.0"     // Plugin version.
 
 #define VEC3_ROTATION_INDEX     3           // Starting index in the prop positions array for the rotation vector.
 
@@ -21,6 +22,10 @@ public Plugin:myinfo = {
 }
 
 new Handle:g_hPropPositions = INVALID_HANDLE, Handle:g_hPropPaths = INVALID_HANDLE;
+new bool:g_bIsPropifyLoaded;
+
+// TODO Store the offsets in the client array.
+new g_rgPropOffsetIndexes[MAXPLAYERS+1] = { -1, ... };
 
 public OnPluginStart() {
     g_hPropPositions = CreateArray(6);
@@ -32,8 +37,23 @@ public OnPluginEnd() {
 }
 
 public OnAllPluginsLoaded() {
-    if (LibraryExists("nosoop-propify")) {
+    g_bIsPropifyLoaded = LibraryExists("nosoop-propify");
+    
+    if (g_bIsPropifyLoaded) {
         // TODO Figure out how to get ConfigHandler_All working.
+        Propify_RegisterConfigHandler("prop_offsets", ConfigHandler_PropOffsets, ConfigHandler_All);
+        Propify_RegisterConfigHandler("prop_rotations", ConfigHandler_PropRotations, ConfigHandler_All);
+    }
+}
+
+public OnLibraryRemoved(const String:name[]) {
+    g_bIsPropifyLoaded &= !StrEqual(name, "nosoop-propify");
+}
+
+public OnLibraryAdded(const String:name[]) {
+    g_bIsPropifyLoaded |= StrEqual(name, "nosoop-propify");
+    
+    if (g_bIsPropifyLoaded) {
         Propify_RegisterConfigHandler("prop_offsets", ConfigHandler_PropOffsets, ConfigHandler_All);
         Propify_RegisterConfigHandler("prop_rotations", ConfigHandler_PropRotations, ConfigHandler_All);
     }
@@ -48,24 +68,43 @@ public Propify_OnPropified(client, propIndex) {
         
         new propOffsetIndex;
         if ( (propOffsetIndex = FindStringInArray(g_hPropPaths, buffer)) > -1 ) {
-            PrintToServer("Found prop %s.", buffer);
             new Float:off[3], Float:rot[3];
             GetArrayVector(g_hPropPositions, propOffsetIndex, off);
             GetArrayVector(g_hPropPositions, propOffsetIndex, rot, VEC3_ROTATION_INDEX);
             
-            SetVariantPosVector3D(off);
+            SetVariantVector3D(off);
             AcceptEntityInput(client, "SetCustomModelOffset");
             
             // TODO Figure out how to rotate with the player.
             SetVariantVector3D(rot);
             AcceptEntityInput(client, "SetCustomModelRotation");
-        } else {
-            PrintToServer("Could not find prop %s.", buffer);
+            
+            g_rgPropOffsetIndexes[client] = propOffsetIndex;
+            SDKHook(client, SDKHook_PreThink, SDKHook_OnPreThink);
         }
         
         CloseHandle(propPaths);
     } else {
         AcceptEntityInput(client, "ClearCustomModelRotation");
+        g_rgPropOffsetIndexes[client] = -1;
+    }
+}
+
+public SDKHook_OnPreThink(client) {
+    // TODO Figure out how to rotate with the player.
+    if (g_rgPropOffsetIndexes[client] > -1) {
+        new Float:angle[3];
+        GetClientAbsAngles(client, angle);
+        
+        new Float:rot[3];
+        GetArrayVector(g_hPropPositions, g_rgPropOffsetIndexes[client], rot, VEC3_ROTATION_INDEX);
+        
+        angle[1] += rot[1];
+        
+        SetVariantVector3D(angle);
+        AcceptEntityInput(client, "SetCustomModelRotation");
+    } else {
+        SDKUnhook(client, SDKHook_PreThink, SDKHook_OnPreThink);
     }
 }
 
