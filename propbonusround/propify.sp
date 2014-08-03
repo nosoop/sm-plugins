@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "3.5.2"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "3.5.3"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -886,6 +886,7 @@ RegisterConfigHandler(Handle:plugin = INVALID_HANDLE, const String:sSection[], C
         handlerIndex = PushArrayCell(rg_hPropListHandlers, plugin);
         SetConfigHandlerFunction(handlerIndex, sectionHandler);
         SetConfigHandlerScope(handlerIndex, handlerScope);
+
         return handlerIndex;
     }
     return -1;
@@ -897,8 +898,9 @@ public Native_RegisterConfigHandler(Handle:plugin, numParams) {
     GetNativeString(1, sSection, sizeof(sSection));
     
     new ConfigHandler:sectionHandler = GetNativeCell(2);
+    new ConfigHandlerScope:handlerScope = GetNativeCell(3);
     
-    return RegisterConfigHandler(plugin, sSection, sectionHandler);
+    return RegisterConfigHandler(plugin, sSection, sectionHandler, handlerScope);
 }
 
 // Unregister a handler by section name.
