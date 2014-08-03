@@ -9,7 +9,7 @@
 #include <propify>
 #include <sdkhooks>
 
-#define PLUGIN_VERSION          "0.2.0"     // Plugin version.
+#define PLUGIN_VERSION          "0.2.1"     // Plugin version.
 
 #define VEC3_ROTATION_INDEX     3           // Starting index in the prop positions array for the rotation vector.
 
@@ -25,7 +25,8 @@ new Handle:g_hPropPositions = INVALID_HANDLE, Handle:g_hPropPaths = INVALID_HAND
 new bool:g_bIsPropifyLoaded;
 
 // TODO Store the offsets in the client array.
-new g_rgPropOffsetIndexes[MAXPLAYERS+1] = { -1, ... };
+new g_rgPropOffsetIndexes[MAXPLAYERS+1] = { -1, ... },
+    Float:g_rgPropOffsetAngles[MAXPLAYERS+1][3];
 
 public OnPluginStart() {
     g_hPropPositions = CreateArray(6);
@@ -34,6 +35,13 @@ public OnPluginStart() {
 
 public OnPluginEnd() { 
     Propify_UnregisterConfigHandlers();
+    
+    // TODO Fire "clear custom model rotation" input on all affected clients
+}
+
+public Propify_OnPropListCleared() {
+    ClearArray(g_hPropPositions);
+    ClearArray(g_hPropPaths);
 }
 
 public OnAllPluginsLoaded() {
@@ -68,18 +76,19 @@ public Propify_OnPropified(client, propIndex) {
         
         new propOffsetIndex;
         if ( (propOffsetIndex = FindStringInArray(g_hPropPaths, buffer)) > -1 ) {
-            new Float:off[3], Float:rot[3];
+            new Float:off[3];
             GetArrayVector(g_hPropPositions, propOffsetIndex, off);
-            GetArrayVector(g_hPropPositions, propOffsetIndex, rot, VEC3_ROTATION_INDEX);
             
+            // TODO Figure out if this is all we need for offsets.
             SetVariantVector3D(off);
             AcceptEntityInput(client, "SetCustomModelOffset");
             
-            // TODO Figure out how to rotate with the player.
-            SetVariantVector3D(rot);
-            AcceptEntityInput(client, "SetCustomModelRotation");
-            
             g_rgPropOffsetIndexes[client] = propOffsetIndex;
+            
+            // Store the offset angles for the client instead of looking it up in the dynamic array.
+            GetArrayVector(g_hPropPositions, propOffsetIndex, g_rgPropOffsetAngles[client], VEC3_ROTATION_INDEX);
+            
+            // Hook into prethink for client to update model rotation.
             SDKHook(client, SDKHook_PreThink, SDKHook_OnPreThink);
         }
         
@@ -91,15 +100,11 @@ public Propify_OnPropified(client, propIndex) {
 }
 
 public SDKHook_OnPreThink(client) {
-    // TODO Figure out how to rotate with the player.
     if (g_rgPropOffsetIndexes[client] > -1) {
         new Float:angle[3];
         GetClientAbsAngles(client, angle);
         
-        new Float:rot[3];
-        GetArrayVector(g_hPropPositions, g_rgPropOffsetIndexes[client], rot, VEC3_ROTATION_INDEX);
-        
-        angle[1] += rot[1];
+        angle[1] += g_rgPropOffsetAngles[client][1];
         
         SetVariantVector3D(angle);
         AcceptEntityInput(client, "SetCustomModelRotation");
@@ -156,6 +161,5 @@ FindPropPath(const String:propPath[]) {
     }
     
     index = index > -1 ? index : PushArrayString(g_hPropPaths, propPath);
-    PrintToServer("Index %d : %s", index, propPath);
     return index;
 }
