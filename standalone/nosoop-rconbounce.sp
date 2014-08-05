@@ -7,7 +7,7 @@
 #include <sourcemod>
 #include <smrcon>
 
-#define PLUGIN_VERSION          "1.1.1"     // Plugin version.
+#define PLUGIN_VERSION          "1.1.2"     // Plugin version.
 
 // Configuration file name.
 #define CONFIG_NAME             "configs/rconbounce.cfg"
@@ -124,18 +124,29 @@ public Action:SMRCon_OnCommand(rconId, const String:address[], const String:comm
             // Are we only accepting WL'd commands?
             new bool:whitelistCmds = KvGetNum(keyValues, CONFIGKEY_WHITELIST, 0) > 0;
 
-            for (new c = 0; c < cmdCount && !done; c++) {
+            allow = true;
+            for (new c = 0; c < cmdCount && allow; c++) {
                 // Ignore empty strings.
                 if (strlen(cmds[c]) == 0) {
                     continue;
                 }
-            
-                for (new i = 0; i < filterCmdCount && allow; i++) {
+                
+                new bool:allowCommand = !whitelistCmds;
+                
+                new bool:done = false;
+                for (new i = 0; i < filterCmdCount && !done; i++) {
                     // If blacklisting, array contains the command != false, then drop
                     // If whitelisting, array contains the command != true, also drop
-                    if (StrEqual(cmds[c], filterCmds[i]) != whitelistCmds) {
-                        allow = false;
+                    
+                    // If contained, allow if WL, disallow if BL.
+                    if (StrEqual(cmds[c], filterCmds[i])) {
+                        allowCommand = !allowCommand;
+                        done = true;
                     }
+                }
+                
+                if (!allowCommand) {
+                    allow = false;
                 }
             }
         }
