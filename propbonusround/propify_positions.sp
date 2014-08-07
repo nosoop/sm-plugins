@@ -9,7 +9,7 @@
 #include <propify>
 #include <sdkhooks>
 
-#define PLUGIN_VERSION          "1.0.0"     // Plugin version.
+#define PLUGIN_VERSION          "1.0.1"     // Plugin version.
 
 #define VEC3_ROTATION_INDEX     3           // Starting index in the prop positions array for the rotation vector.
 
@@ -85,7 +85,7 @@ public Propify_OnPropified(client, propIndex) {
             GetArrayVector(g_hPropPositions, propOffsetIndex, g_rgPropOffsetAngles[client], VEC3_ROTATION_INDEX);
             
             // Hook into prethink for client to update model rotation if it's a non-zero vector.
-            if (GetVectorLength(g_rgPropOffsetAngles[client]) > 0.0) {
+            if (FloatAbs(GetVectorLength(g_rgPropOffsetAngles[client])) > 0.0) {
                 SDKHook(client, SDKHook_PreThink, SDKHook_OnPreThink);
             }
         }
