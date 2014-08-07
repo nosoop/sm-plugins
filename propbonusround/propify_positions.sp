@@ -9,7 +9,7 @@
 #include <propify>
 #include <sdkhooks>
 
-#define PLUGIN_VERSION          "0.2.1"     // Plugin version.
+#define PLUGIN_VERSION          "1.0.0"     // Plugin version.
 
 #define VEC3_ROTATION_INDEX     3           // Starting index in the prop positions array for the rotation vector.
 
@@ -24,9 +24,7 @@ public Plugin:myinfo = {
 new Handle:g_hPropPositions = INVALID_HANDLE, Handle:g_hPropPaths = INVALID_HANDLE;
 new bool:g_bIsPropifyLoaded;
 
-// TODO Store the offsets in the client array.
-new g_rgPropOffsetIndexes[MAXPLAYERS+1] = { -1, ... },
-    Float:g_rgPropOffsetAngles[MAXPLAYERS+1][3];
+new Float:g_rgPropOffsetAngles[MAXPLAYERS+1][3];
 
 public OnPluginStart() {
     g_hPropPositions = CreateArray(6);
@@ -83,34 +81,33 @@ public Propify_OnPropified(client, propIndex) {
             SetVariantVector3D(off);
             AcceptEntityInput(client, "SetCustomModelOffset");
             
-            g_rgPropOffsetIndexes[client] = propOffsetIndex;
-            
             // Store the offset angles for the client instead of looking it up in the dynamic array.
             GetArrayVector(g_hPropPositions, propOffsetIndex, g_rgPropOffsetAngles[client], VEC3_ROTATION_INDEX);
             
-            // Hook into prethink for client to update model rotation.
-            SDKHook(client, SDKHook_PreThink, SDKHook_OnPreThink);
+            // Hook into prethink for client to update model rotation if it's a non-zero vector.
+            if (GetVectorLength(g_rgPropOffsetAngles[client]) > 0.0) {
+                SDKHook(client, SDKHook_PreThink, SDKHook_OnPreThink);
+            }
         }
         
         CloseHandle(propPaths);
     } else {
+        SetVariantVector3D(NULL_VECTOR);
+        AcceptEntityInput(client, "SetCustomModelOffset");
+    
         AcceptEntityInput(client, "ClearCustomModelRotation");
-        g_rgPropOffsetIndexes[client] = -1;
+        SDKUnhook(client, SDKHook_PreThink, SDKHook_OnPreThink);
     }
 }
 
 public SDKHook_OnPreThink(client) {
-    if (g_rgPropOffsetIndexes[client] > -1) {
-        new Float:angle[3];
-        GetClientAbsAngles(client, angle);
-        
-        angle[1] += g_rgPropOffsetAngles[client][1];
-        
-        SetVariantVector3D(angle);
-        AcceptEntityInput(client, "SetCustomModelRotation");
-    } else {
-        SDKUnhook(client, SDKHook_PreThink, SDKHook_OnPreThink);
-    }
+    new Float:angle[3];
+    GetClientAbsAngles(client, angle);
+    
+    angle[1] += g_rgPropOffsetAngles[client][1];
+    
+    SetVariantVector3D(angle);
+    AcceptEntityInput(client, "SetCustomModelRotation");
 }
 
 public ConfigHandler_PropOffsets(const String:key[], const String:value[]) {
