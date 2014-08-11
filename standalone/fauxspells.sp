@@ -9,7 +9,7 @@
 #include <tf2_stocks>
 #include <tf2items_giveweapon>
 
-#define PLUGIN_VERSION          "0.0.1"     // Plugin version.
+#define PLUGIN_VERSION          "0.1.0"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Faux Spells",
@@ -36,6 +36,13 @@ public String:spellnames[12][32] =
     "Skeleton Horde"
 };
 
+public String:tickSound[][] = {
+    "misc/halloween/spelltick_01.wav", 
+    "misc/halloween/spelltick_02.wav"
+};
+
+new Float:rg_fLastSpellPickup[MAXPLAYERS+1], bool:rg_bSpellTick[MAXPLAYERS+1];
+
 public OnPluginStart() {
     CreateConVar("tf_spellbookcmds_version", PLUGIN_VERSION, "[TF2] Spellbook Commands version", FCVAR_NOTIFY|FCVAR_PLUGIN);
     RegAdminCmd("sm_setspell", Cmd_SetSpell, ADMFLAG_CHEATS, "Sets the number of spells on a player's spellbook. Will also change their spell if 2nd param given. Target is 3rd param.");
@@ -53,9 +60,27 @@ public OnPluginStart() {
         TF2Items_CreateWeapon(9551, "tf_weapon_spellbook", 1070, 5, 1, 1);
     }
     
-    HookEvent("post_inventory_application", Hook_PostPlayerInventoryUpdate);
+    CacheTickSounds();
     
-    // On touch: set a timer that plays sound\misc\halloween\spelltick_01.wav and sound\misc\halloween\spelltick_02.wav
+    HookEvent("post_inventory_application", Hook_PostPlayerInventoryUpdate);
+}
+
+public OnMapStart() {
+    CacheTickSounds();
+    
+    // Find existing spell pickups and hook them.
+    new i = -1;
+    while ((i = FindEntityByClassname(i, "tf_spell_pickup")) != -1) {
+        SDKHook(i, SDKHook_Touch, SDKHook_OnTouch);
+    }
+}
+
+CacheTickSounds() {
+    decl String:soundPath[96];
+    for (new i = 0; i < sizeof(tickSound); i++) {
+        Format(soundPath, sizeof(soundPath), "sound/%s", tickSound[i]);
+        PrecacheSound(soundPath, true);
+    }
 }
 
 public Hook_PostPlayerInventoryUpdate(Handle:event, const String:name[], bool:dontBroadcast) {
@@ -63,6 +88,42 @@ public Hook_PostPlayerInventoryUpdate(Handle:event, const String:name[], bool:do
     FindSpellbook(client);
 }
 
+public OnEntityCreated(entity, const String:class[]) {
+    if (StrEqual(class, "tf_spell_pickup")) {
+        SDKHook(entity, SDKHook_Touch, SDKHook_OnTouch);
+    }
+}
+
+public SDKHook_OnTouch(pickup, client) {
+    // TODO Store spellbook entity index.
+    // TODO Fix bug that if the entity is invisible but being touched, the timers will still run.
+    new bool:isValidClient = client > 0 && client < MAXPLAYERS+1 && IsPlayerAlive(client);
+    if ( isValidClient && GetTickedTime() - rg_fLastSpellPickup[client] > 2.0
+            && GetEntProp(FindSpellbook(client, false), Prop_Send, "m_iSpellCharges") < 1 ) {
+        rg_fLastSpellPickup[client] = GetTickedTime();
+        CreateTimer(0.1, Timer_Spellbook, client, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
+        CreateTimer(2.1, Timer_GetSpell, client, TIMER_FLAG_NO_MAPCHANGE);
+    }
+}
+
+// Fake the spellbook ticking.
+public Action:Timer_Spellbook(Handle:timer, any:client) {
+    rg_bSpellTick[client] = !rg_bSpellTick[client];
+    EmitSoundToClient(client, tickSound[!rg_bSpellTick[client]]);
+    if (GetTickedTime() - rg_fLastSpellPickup[client] > 2.0 ) {
+        KillTimer(timer);
+    }
+}
+
+public Action:Timer_GetSpell(Handle:timer, any:client) {
+    new spellbook = FindSpellbook(client, false);
+    new charges = GetEntProp(spellbook, Prop_Send, "m_iSpellCharges");
+    if (charges > 0) {
+        new spell = GetEntProp(spellbook, Prop_Send, "m_iSelectedSpellIndex");
+        
+        PrintToChat(client, "You got %d uses of the spell %s!", charges, spellnames[spell]);
+    }
+}
 
 public Action:Cmd_SpellList(client, args) {
     ReplyToCommand(client, "[SM] List of Halloween spells for use with /setspell:");
@@ -178,6 +239,7 @@ public Action:Command_CreateSpell(client, args) {
     vel[2] = GetRandomFloat(300.0, 500.0);
     
     SetEntProp(spellbook, Prop_Data, "m_nTier", tier);
+    DispatchKeyValue(spellbook, "OnPlayerTouch", "!self,Kill,,0,-1");	// Remove this spell pickup.
     
     TeleportEntity(spellbook, pos, ang, vel);
     DispatchSpawn(spellbook);
@@ -185,7 +247,7 @@ public Action:Command_CreateSpell(client, args) {
     return Plugin_Handled;
 }
 
-stock FindSpellbook(client) {  //GetPlayerWeaponSlot was giving me some issues
+stock FindSpellbook(client, bool:createIfNonexistent = true) {  //GetPlayerWeaponSlot was giving me some issues
     new i = -1;
     while ((i = FindEntityByClassname(i, "tf_weapon_spellbook")) != -1) {
         if (IsValidEntity(i) && GetEntPropEnt(i, Prop_Send, "m_hOwnerEntity") == client && !GetEntProp(i, Prop_Send, "m_bDisguiseWeapon")) {
@@ -201,8 +263,13 @@ stock FindSpellbook(client) {  //GetPlayerWeaponSlot was giving me some issues
     
     // Create a custom spellbook.  (If Spy, Engineer use the 5-slot version)
     // TODO Figure out cosmetics bug.
-    new TFClassType:playerClass = TF2_GetPlayerClass(client);
-    new spellbook = TF2Items_GiveWeapon(client, 9550 + _:(playerClass == TFClass_Spy || playerClass == TFClass_Engineer));
-    SetEntProp(spellbook, Prop_Send, "m_bFiredAttack", false);
-    return spellbook;
+    if (createIfNonexistent) {
+        new TFClassType:playerClass = TF2_GetPlayerClass(client);
+        new spellbook = TF2Items_GiveWeapon(client, 9550 + _:(playerClass == TFClass_Spy || playerClass == TFClass_Engineer));
+        SetEntProp(spellbook, Prop_Send, "m_bFiredAttack", false);
+        PrintToChat(client, "It's dangerous out there.  You've been given a Spellbook Magazine.");
+        return spellbook;
+    } else {
+        return -1;
+    }
 }
