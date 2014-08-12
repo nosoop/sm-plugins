@@ -9,12 +9,12 @@
 #include <tf2_stocks>
 #include <tf2items_giveweapon>
 
-#define PLUGIN_VERSION          "0.1.0"     // Plugin version.
+#define PLUGIN_VERSION          "0.2.0"     // Plugin version.
 
 public Plugin:myinfo = {
-    name = "[TF2] Faux Spells",
+    name = "[TF2] Unofficial Spell Handler",
     author = "nosoop",
-    description = "Custom Halloween spell handling!",
+    description = "Plugin to handle Halloween spells because Valve won't!",
     version = PLUGIN_VERSION,
     url = "http://github.com/nosoop"
 }
@@ -37,22 +37,23 @@ public String:spellnames[12][32] =
 };
 
 public String:tickSound[][] = {
-    "misc/halloween/spelltick_01.wav", 
-    "misc/halloween/spelltick_02.wav"
+    "misc/halloween/spelltick_02.wav",
+    "misc/halloween/spelltick_01.wav",
+    "misc/halloween/spelltick_set.wav"
 };
 
-new Float:rg_fLastSpellPickup[MAXPLAYERS+1], bool:rg_bSpellTick[MAXPLAYERS+1];
+new Float:rg_fLastSpellPickup[MAXPLAYERS+1], rg_nSpellTick[MAXPLAYERS+1];
 
 public OnPluginStart() {
-    CreateConVar("tf_spellbookcmds_version", PLUGIN_VERSION, "[TF2] Spellbook Commands version", FCVAR_NOTIFY|FCVAR_PLUGIN);
+    CreateConVar("tf_spellbookcmds_version", PLUGIN_VERSION, "[TF2] Faux Spells version", FCVAR_NOTIFY|FCVAR_PLUGIN);
     RegAdminCmd("sm_setspell", Cmd_SetSpell, ADMFLAG_CHEATS, "Sets the number of spells on a player's spellbook. Will also change their spell if 2nd param given. Target is 3rd param.");
     RegAdminCmd("sm_spelllist", Cmd_SpellList, 0, "Lists the name and index of each spell");
     hCvarLimit = CreateConVar("tf_spellbookcmds_limit", "-1", "Limits the number of spells those without access to sm_setspell_unlimit can set themselves to. -1 to disable.", FCVAR_PLUGIN);
     LoadTranslations("common.phrases");
     
-    RegAdminCmd("sm_forcespell_create", Command_CreateSpell, ADMFLAG_GENERIC, "Spawns a spellbook.");
+    RegAdminCmd("sm_spawnspellbook", Command_CreateSpell, ADMFLAG_GENERIC, "Spawns a spellbook.");
     
-    // Custom spellbook.  TODO Fix spell on spy.
+    // Custom spellbooks, one for most classes, another for Engineer / Spy.
     if (!TF2Items_CheckWeapon(9550)) {
         TF2Items_CreateWeapon(9550, "tf_weapon_spellbook", 1070, 4, 1, 1);
     }
@@ -60,7 +61,10 @@ public OnPluginStart() {
         TF2Items_CreateWeapon(9551, "tf_weapon_spellbook", 1070, 5, 1, 1);
     }
     
-    CacheTickSounds();
+    // TODO Add cvar to control fake ticking (to disable on Helltower)
+    // TODO Add cvar to control automatic spellbook granting
+    // TODO Remove spell commands
+    // TODO Add custom spell support!  (Extended override handling on spellbooks)
     
     HookEvent("post_inventory_application", Hook_PostPlayerInventoryUpdate);
 }
@@ -101,17 +105,25 @@ public SDKHook_OnTouch(pickup, client) {
     if ( isValidClient && GetTickedTime() - rg_fLastSpellPickup[client] > 2.0
             && GetEntProp(FindSpellbook(client, false), Prop_Send, "m_iSpellCharges") < 1 ) {
         rg_fLastSpellPickup[client] = GetTickedTime();
-        CreateTimer(0.1, Timer_Spellbook, client, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
+        CreateTimer(0.075, Timer_Spellbook, client, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
         CreateTimer(2.1, Timer_GetSpell, client, TIMER_FLAG_NO_MAPCHANGE);
     }
 }
 
 // Fake the spellbook ticking.
 public Action:Timer_Spellbook(Handle:timer, any:client) {
-    rg_bSpellTick[client] = !rg_bSpellTick[client];
-    EmitSoundToClient(client, tickSound[!rg_bSpellTick[client]]);
-    if (GetTickedTime() - rg_fLastSpellPickup[client] > 2.0 ) {
+    EmitSoundToClient(client, tickSound[rg_nSpellTick[client]++ % 2]);
+    
+    new Float:tickedDuration = GetTickedTime() - rg_fLastSpellPickup[client];
+    if (tickedDuration > 2.0 ) {
+        rg_nSpellTick[client] = 0;
         KillTimer(timer);
+    } else if (rg_nSpellTick[client] > 12) {
+        KillTimer(timer);
+        CreateTimer(0.225, Timer_Spellbook, client, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
+    } else if (rg_nSpellTick[client] > 10) {
+        KillTimer(timer);
+        CreateTimer(0.151, Timer_Spellbook, client, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
     }
 }
 
@@ -120,6 +132,8 @@ public Action:Timer_GetSpell(Handle:timer, any:client) {
     new charges = GetEntProp(spellbook, Prop_Send, "m_iSpellCharges");
     if (charges > 0) {
         new spell = GetEntProp(spellbook, Prop_Send, "m_iSelectedSpellIndex");
+        
+        EmitSoundToClient(client, tickSound[2], _, _, _, _, 0.5);
         
         PrintToChat(client, "You got %d uses of the spell %s!", charges, spellnames[spell]);
     }
@@ -228,21 +242,15 @@ public Action:Command_CreateSpell(client, args) {
     
     new spellbook = CreateEntityByName("tf_spell_pickup");
     
-    decl Float:pos[3], Float:vel[3], Float:ang[3];
-    ang[0] = 0.0;
-    ang[1] = 0.0;
-    ang[2] = 0.0;
-    GetClientAbsOrigin(client, pos);
+    decl Float:pos[3];
     
-    vel[0] = GetRandomFloat(-400.0, 400.0);
-    vel[1] = GetRandomFloat(-400.0, 400.0);
-    vel[2] = GetRandomFloat(300.0, 500.0);
-    
-    SetEntProp(spellbook, Prop_Data, "m_nTier", tier);
-    DispatchKeyValue(spellbook, "OnPlayerTouch", "!self,Kill,,0,-1");	// Remove this spell pickup.
-    
-    TeleportEntity(spellbook, pos, ang, vel);
-    DispatchSpawn(spellbook);
+    if (SetTeleportEndPoint(client, pos)) {
+        SetEntProp(spellbook, Prop_Data, "m_nTier", tier);
+        DispatchKeyValue(spellbook, "OnPlayerTouch", "!self,Kill,,0,-1");	// Remove this spell pickup.
+        
+        TeleportEntity(spellbook, pos, NULL_VECTOR, NULL_VECTOR);
+        DispatchSpawn(spellbook);
+    }
 
     return Plugin_Handled;
 }
@@ -273,3 +281,46 @@ stock FindSpellbook(client, bool:createIfNonexistent = true) {  //GetPlayerWeapo
         return -1;
     }
 }
+
+SetTeleportEndPoint(client, Float:vector[3]) {
+	new Float:vAngles[3];
+	new Float:vOrigin[3];
+	decl Float:vBuffer[3];
+	decl Float:vStart[3];
+	decl Float:Distance;
+	
+	GetClientEyePosition(client,vOrigin);
+	GetClientEyeAngles(client, vAngles);
+	
+    // Get point to spawn taken from pheadxdll's Pumpkins plugin.
+	new Handle:trace = TR_TraceRayFilterEx(vOrigin, vAngles, MASK_SHOT, RayType_Infinite, TraceEntityFilterPlayer);
+
+	if (TR_DidHit(trace)) {   	 
+   	 	TR_GetEndPosition(vStart, trace);
+		GetVectorDistance(vOrigin, vStart, false);
+		Distance = -35.0;
+   	 	GetAngleVectors(vAngles, vBuffer, NULL_VECTOR, NULL_VECTOR);
+		vector[0] = vStart[0] + (vBuffer[0]*Distance);
+		vector[1] = vStart[1] + (vBuffer[1]*Distance);
+		vector[2] = vStart[2] + (vBuffer[2]*Distance);
+	} else {
+		CloseHandle(trace);
+		return false;
+	}
+	
+	CloseHandle(trace);
+	return true;
+}
+
+public bool:TraceEntityFilterPlayer(entity, contentsMask) {
+	return entity > GetMaxClients() || !entity;
+}
+
+/**
+ * Client demos run at 66.6 ticks per second.  According to a test demo on Helltower...
+ * 833 + 3 pick up spell, no sound, then the next ones tick at...
+ * 836 + 5, 841 + 5, 846 + 5, 851 + 5, 856 + 6, 862 + 5, 867 + 6, 873 + 5, 878 + 6, 884 + 5,
+ * 889 + 9, 898 + 11
+ * 909 + 15, 924 + 15, 939 + 14, 953 + 16, 969 is spoop as we find out which spell we get (133 ticks = 2 seconds.
+ * So we create a timer for 0.75 sec, play first 10, skip every other for next 2, skip two for next 4
+*/

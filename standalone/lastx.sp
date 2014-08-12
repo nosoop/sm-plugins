@@ -45,6 +45,8 @@ public Hook_PlayerDisconnectPre(Handle:event, const String:name[], bool:dontBroa
         GetEventString(event, "name", steamname, sizeof(steamname));
         GetEventString(event, "networkid", steamid, sizeof(steamid));
         
+        // TODO Remove array listing if it exists.
+        
         if (++count >= lastxhistory) {
             count = lastxhistory;
             RemoveFromArray(PlayerName, lastxhistory - 1);
