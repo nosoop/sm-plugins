@@ -9,7 +9,7 @@
 #include <morecolors>
 #include <tf2>
 
-#define PLUGIN_VERSION          "0.0.0"     // Plugin version.
+#define PLUGIN_VERSION          "1.0.0"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Losing Team MVPs",
@@ -67,7 +67,7 @@ public Action:Timer_ShowLosingMVPs(Handle:timer, any:losingTeam) {
         SetArrayCell(rgLosers, r, 0, SCORE);
     }
     
-    for (new c = 0; c < MaxClients; c++) {
+    for (new c = 1; c < MaxClients; c++) {
         if (IsClientInGame(c) && TFTeam:GetClientTeam(c) == losingTeam) {
             new playerRoundScore = GetEntProp(GetPlayerResourceEntity(), Prop_Send, "m_iTotalScore", _, c) - g_rgnStartingScore[c];
             
@@ -89,10 +89,30 @@ public Action:Timer_ShowLosingMVPs(Handle:timer, any:losingTeam) {
     }
     
     if (validPlayers > 0) {
-        // Build and format a text prompt as follows for the interval 0, (validPlayers < 3 ? maxPlayers : 3)
+        decl String:messageBuffer[512];
+        
+        new String:teamColor[16];
+        teamColor = (TFTeam:losingTeam == TFTeam_Red ? "{RED}" : "{BLUE}");
+        
+        Format(messageBuffer, sizeof(messageBuffer),
+                "Top scoring players on %s%s{DEFAULT}:", teamColor, TFTeam:losingTeam == TFTeam_Red ? "RED" : "BLU");
+        
         // Top three players on [LOSING TEAM]:
         // %N (%d points), ...
         // GetArrayCell(rgLosers, j, CLIENTID), 
+        decl String:scoreBuffer[64];
+        for (new p = 0; p < validPlayers; p++) {
+            new client = GetArrayCell(rgLosers, p, CLIENTID);
+            new score = GetArrayCell(rgLosers, p, SCORE);
+            
+            // Example:  {RED}0xDEADBEEF{DEFAULT} (12 points)
+            Format(scoreBuffer, sizeof(scoreBuffer), "%s%N{DEFAULT} (%d points)", teamColor, client, score);
+            
+            // Append new player to buffer and append a comma if there are more players to add.
+            Format(messageBuffer, sizeof(messageBuffer), "%s %s%s", messageBuffer, scoreBuffer, (p+1 < validPlayers ? "," : ""));
+        }
+        
+        CPrintToChatAll(messageBuffer);
     }
     
     CloseHandle(rgLosers);
