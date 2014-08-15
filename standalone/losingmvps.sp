@@ -9,7 +9,7 @@
 #include <morecolors>
 #include <tf2>
 
-#define PLUGIN_VERSION          "1.0.0"     // Plugin version.
+#define PLUGIN_VERSION          "1.0.1"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Losing Team MVPs",
@@ -60,6 +60,7 @@ public Action:Timer_ShowLosingMVPs(Handle:timer, any:losingTeam) {
     // First dimension is number of players (ranked), second dimension holds client id and score.
     new validPlayers;
     
+    // Size of array is number of players to include.  First block holds client id, second block holds round score.
     new Handle:rgLosers = CreateArray(2, g_nTopPlayerCount);
     
     // Initialize the array in scores.

@@ -9,7 +9,7 @@
 #include <propify>
 #include <sdkhooks>
 
-#define PLUGIN_VERSION          "1.0.2"     // Plugin version.
+#define PLUGIN_VERSION          "1.0.3"     // Plugin version.
 
 #define VEC3_ROTATION_INDEX     3           // Starting index in the prop positions array for the rotation vector.
 
@@ -116,7 +116,6 @@ public ConfigHandler_PropOffsets(const String:key[], const String:value[]) {
     new Float:vOffset[3];
     StringToVector(value, vOffset);
     
-    PushArrayCell(g_hPropPositions, 0.0);
     SetArrayVector(g_hPropPositions, index, vOffset);
 }
 
