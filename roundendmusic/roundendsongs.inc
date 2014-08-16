@@ -17,7 +17,12 @@ public __pl_roundendmusic_SetNTVOptional() {
     MarkNativeAsOptional("REM_AddToQueue");
 }
 
-functag SongSelector public();
+#define ARRAY_ARTIST            0
+#define ARRAY_TITLE             1
+#define ARRAY_FILEPATH          2
+
+#define STR_ARTIST_LENGTH       48          // Maximum length of an artist name.
+#define STR_TITLE_LENGTH        48          // Maximum length of a song title.
 
 /**
  * Called when the Round End Music plugin needs songs.

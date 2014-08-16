@@ -7,7 +7,7 @@
 #include <sourcemod>
 #include <sdktools>
 
-#define PLUGIN_VERSION          "0.1.0"     // Plugin version.
+#define PLUGIN_VERSION          "0.2.0"     // Plugin version.
 
 #define ARRAY_ARTIST            0
 #define ARRAY_TITLE             1
@@ -28,6 +28,8 @@ new g_iTrack, g_nSongsAdded;
 
 // Contains title, artist / source, and file path, respectively.
 new Handle:g_hSongData[3] = { INVALID_HANDLE, INVALID_HANDLE, INVALID_HANDLE };
+
+// Contains pointer to a shuffled track and a boolean to determine if the track was played this map.
 new Handle:g_hTrackNum = INVALID_HANDLE;
 
 new Handle:g_hFRequestSongs = INVALID_HANDLE,   // Global forward to notify that songs are needed.
@@ -40,13 +42,16 @@ public OnPluginStart() {
     // -- Reshuffle queued tracks (boolean)
     
     // Register commands.
-    RegAdminCmd("sm_playsong", Command_PlaySong, ADMFLAG_ROOT, "Play a round-end song.");
+    RegAdminCmd("sm_playsong", Command_PlaySong, ADMFLAG_ROOT, "Play a round-end song (for debugging).");
+    RegAdminCmd("sm_rem_rerollsongs", Command_RerollSongs, ADMFLAG_ROOT, "Redo round end music (for debugging).");
     RegConsoleCmd("sm_songlist", Command_DisplaySongList, "Opens a menu with the current song listing.");
     
     // Initialize the arrays.
     g_hSongData[ARRAY_ARTIST] = CreateArray(STR_ARTIST_LENGTH);
     g_hSongData[ARRAY_TITLE] = CreateArray(STR_TITLE_LENGTH);
     g_hSongData[ARRAY_FILEPATH] = CreateArray(PLATFORM_MAX_PATH);
+    
+    g_hTrackNum = CreateArray(2);
     
     // Hook endround.
     HookEvent("teamplay_round_win", Event_RoundEnd);
@@ -67,19 +72,31 @@ public OnMapStart() {
 }
 
 public Event_RoundEnd(Handle:event, const String:name[], bool:dontBroadcast) {
-    // TODO Timer for round end and start playing song.
     CreateTimer(4.3, Timer_PlayEndRound, _, TIMER_FLAG_NO_MAPCHANGE);
 }
 
 public Action:Timer_PlayEndRound(Handle:timer, any:data) {
-    // ...
+    PlayEndRoundSong(GetNextSong());
     return Plugin_Handled;
 }
 
 PlayEndRoundSong(iSong) {
-    decl String:sSoundPath[PLATFORM_MAX_PATH];
-    GetArrayString(g_hSongData[ARRAY_FILEPATH], 0, sSoundPath, sizeof(sSoundPath));
+    decl String:sSongArtist[STR_ARTIST_LENGTH],
+        String:sSongTitle[STR_TITLE_LENGTH],
+        String:sSoundPath[PLATFORM_MAX_PATH];
+    GetArrayString(g_hSongData[ARRAY_ARTIST], iSong, sSongArtist, sizeof(sSongArtist));
+    GetArrayString(g_hSongData[ARRAY_TITLE], iSong, sSongTitle, sizeof(sSongTitle));
+    GetArrayString(g_hSongData[ARRAY_FILEPATH], iSong, sSoundPath, sizeof(sSoundPath));
+    
+    // TODO Increase playcount, show that it was played.
+    
+    // Play song.
     EmitSoundToAll(sSoundPath);
+    
+    // Show song information in chat.
+    // TODO Nice coloring.
+    PrintToChatAll("\x01You are listening to \x04%s\x01 from \x04%s\x01!", sSongTitle, sSongArtist);
+    PrintToServer("[rem] Played song %d of %d (%s)", iSong + 1, g_nSongsAdded, sSoundPath);
 }
 
 QueueSongs() {
@@ -87,6 +104,7 @@ QueueSongs() {
     for (new i = 0; i < 3; i++) {
         ClearArray(g_hSongData[i]);
     }
+    g_nSongsAdded = 0;
 
     // Call global forward to request songs.
     new Action:result;
@@ -94,19 +112,36 @@ QueueSongs() {
     Call_PushCell(5);
     Call_Finish(result);
     
-    decl String:sSoundPath[PLATFORM_MAX_PATH];
-    decl String:sFilePath[PLATFORM_MAX_PATH];
+    // Initialize shuffler.
+    ClearArray(g_hTrackNum);
+    
+    decl String:sSongPath[PLATFORM_MAX_PATH], String:sFilePath[PLATFORM_MAX_PATH];
     for (new i = 0; i < GetArraySize(g_hSongData[ARRAY_FILEPATH]); i++) {
-        GetArrayString(g_hSongData[ARRAY_FILEPATH], i, sSoundPath, sizeof(sSoundPath));
-        PrecacheSound(sSoundPath);
+        GetArrayString(g_hSongData[ARRAY_FILEPATH], i, sSongPath, sizeof(sSongPath));
+        PrecacheSound(sSongPath);
         
-        Format(sFilePath, sizeof(sFilePath), "sound/%s", sFilePath);
+        Format(sFilePath, sizeof(sFilePath), "sound/%s", sSongPath);
         AddFileToDownloadsTable(sFilePath);
         
-        PrintToServer("Queued song %d: %s from %s (file %s).", i, sTrack, sArtist, sFilePath);
+        new track = PushArrayCell(g_hTrackNum, i);
+        SetArrayCell(g_hTrackNum, track, false, 1);
+        
+        PrintToServer("[rem] Added song %d: %s", i, sSongPath);
     }
     
-    // TODO Shuffle songs.
+    // Shuffle pointers with Fisher-Yates.  Source because I don't know it off the top of my head:
+    // http://spin.atomicobject.com/2014/08/11/fisher-yates-shuffle-randomization-algorithm/
+    new nTracks = GetArraySize(g_hTrackNum);
+    for (new i = 0; i < nTracks; i++) {
+        new j = GetRandomInt(i, nTracks - 1);
+        SwapArrayItems(g_hTrackNum, i, j);
+    }
+}
+
+GetNextSong() {
+    new iTrack = GetArrayCell(g_hTrackNum, g_iTrack++);
+    g_iTrack %= g_nSongsAdded;
+    return iTrack;
 }
 
 /**
@@ -114,9 +149,10 @@ QueueSongs() {
  */
 bool:AddToQueue(const String:sArtist[], const String:sTrack[], const String:sFilePath[]) {
     if (FindStringInArray(g_hSongData[ARRAY_FILEPATH], sFilePath) == -1) {
-        new index = PushArrayString(g_hSongData[ARRAY_ARTIST], sArtist);
+        PushArrayString(g_hSongData[ARRAY_ARTIST], sArtist);
         PushArrayString(g_hSongData[ARRAY_TITLE], sTrack);
         PushArrayString(g_hSongData[ARRAY_FILEPATH], sFilePath);
+        g_nSongsAdded++;
         return true;
     }
     return false;
@@ -125,9 +161,7 @@ bool:AddToQueue(const String:sArtist[], const String:sTrack[], const String:sFil
 public Native_AddToQueue(Handle:plugin, numParams) {
     decl String:rgsSongData[3][PLATFORM_MAX_PATH];
     
-    decl nStrLength;
     for (new i = 0; i < 3; i++) {
-        GetNativeStringLength(i+1, nStrLength);
         GetNativeString(i+1, rgsSongData[i], PLATFORM_MAX_PATH);
     }
     
@@ -135,8 +169,23 @@ public Native_AddToQueue(Handle:plugin, numParams) {
 }
 
 public Action:Command_PlaySong(client, args) {
+    new iTrack;
+    if (args > 0) {
+        decl String:num[4];
+        GetCmdArg(1, num, sizeof(num));
+        iTrack = StringToInt(num);
+    } else {
+        iTrack = GetNextSong();
+    }
+
     // TODO Cycle through round end songs or something.
-    PlayEndRoundSong(0);
+    PlayEndRoundSong(iTrack);
+    return Plugin_Handled;
+}
+
+public Action:Command_RerollSongs(client, args) {
+    PrintToServer("[rem] Songlist requeued by %N -- be sure to reconnect.", client);
+    QueueSongs();
     return Plugin_Handled;
 }
 
