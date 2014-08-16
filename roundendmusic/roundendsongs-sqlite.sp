@@ -19,15 +19,27 @@ public Plugin:myinfo = {
 }
 
 new Handle:g_hCDatabaseName = INVALID_HANDLE,           String:g_sDatabaseName[32],
-    Handle:g_hCTableName = INVALID_HANDLE,              String:g_sTableName[32];
+    Handle:g_hCTableName = INVALID_HANDLE,              String:g_sTableName[32],
+    Handle:g_hCSongDir = INVALID_HANDLE,                String:g_sSongDir[32];
+
+// SQLite snippet to generate a number between 0 to 1 for each query.
+// Source:  http://stackoverflow.com/a/23785593
+new String:g_sRandomFunction[] = "(random() / 18446744073709551616 + 0.5)";
 
 public OnPluginStart() {
+
     // Hook database.
     g_hCDatabaseName = CreateConVar("sm_rem_sqli_db", "roundendsongs", "Database entry in databases.cfg to load songs from.", FCVAR_PLUGIN|FCVAR_SPONLY);
-    g_hCTableName = CreateConVar("sm_rem_sqli_tbl", "songdata", "Table to read songs from.", FCVAR_PLUGIN|FCVAR_SPONLY);
-    
+    GetConVarString(g_hCDatabaseName, g_sDatabaseName, sizeof(g_sDatabaseName));
     HookConVarChange(g_hCDatabaseName, OnConVarChanged);
+    
+    g_hCTableName = CreateConVar("sm_rem_sqli_tbl", "songdata", "Table to read songs from.", FCVAR_PLUGIN|FCVAR_SPONLY);
+    GetConVarString(g_hCTableName, g_sTableName, sizeof(g_sTableName));
     HookConVarChange(g_hCTableName, OnConVarChanged);
+    
+    g_hCSongDir = CreateConVar("sm_rem_sqli_dir", "roundendsongs/", "Directory that the songs are located in, if not already defined as the full path in the database.", FCVAR_PLUGIN|FCVAR_SPONLY);
+    GetConVarString(g_hCSongDir, g_sSongDir, sizeof(g_sSongDir));
+    HookConVarChange(g_hCSongDir, OnConVarChanged);
     
     // Execute configuration.
     AutoExecConfig(true, "plugin.rem_sqlite");
@@ -37,8 +49,46 @@ public Action:REM_OnSongsRequested(nSongs) {
     // Connect to database.
     new Handle:hDatabase = GetSongDatabaseHandle();
     
-    // TODO Implement database fetching.  For now, we're using a sample song to test the functionality of REM.
-    REM_AddToQueue("please ignore", "Test post", "test/alpha2.mp3");
+    // Create sorter function.
+    decl String:sWeightFunction[64];
+    Format(sWeightFunction, sizeof(sWeightFunction),
+            "((playcount + %d) * %s)", GetHighestPlayCount(hDatabase), g_sRandomFunction);
+    
+    decl String:sSongQuery[256];
+    Format(sSongQuery, sizeof(sSongQuery),
+            "SELECT artist,track,filepath FROM %s WHERE enabled = 1 ORDER BY %s LIMIT %d",
+            g_sTableName, sWeightFunction, nSongs);
+    
+    new Handle:hSongQuery = SQL_Query(hDatabase, sSongQuery);
+    
+    decl String:rgsSongData[3][PLATFORM_MAX_PATH];
+    while (SQL_FetchRow(hSongQuery)) {
+        for (new i = 0; i < 3; i++) {
+            SQL_FetchString(hSongQuery, i, rgsSongData[i], sizeof(rgsSongData[]));
+        }
+        
+        // Append directory.
+        Format(rgsSongData[ARRAY_FILEPATH], sizeof(rgsSongData[]), "%s%s", g_sSongDir, rgsSongData[ARRAY_FILEPATH]);
+        REM_AddToQueue(rgsSongData[ARRAY_ARTIST], rgsSongData[ARRAY_TITLE], rgsSongData[ARRAY_FILEPATH]);
+    }
+    
+    CloseHandle(hSongQuery);
+    CloseHandle(hDatabase);
+}
+
+GetHighestPlayCount(Handle:hDatabase) {
+    decl String:sPlayCountQuery[64];
+    Format(sPlayCountQuery, sizeof(sPlayCountQuery),
+            "SELECT MAX(playcount) FROM %s WHERE enabled=1",
+            g_sTableName);
+    new Handle:hPlayCountQuery = SQL_Query(hDatabase, sPlayCountQuery);
+    
+    SQL_FetchRow(hPlayCountQuery);
+    new nTopPlays = SQL_FetchInt(hPlayCountQuery, 0);
+    
+    CloseHandle(hPlayCountQuery);
+    
+    return nTopPlays;
 }
 
 /**
@@ -55,7 +105,7 @@ Handle:GetSongDatabaseHandle() {
             return hDatabase;
         }
     } else {
-        SetFailState("[rem-sqlite] Could not find configuration for the Round End Songs database.");
+        SetFailState("[rem-sqlite] Could not find configuration %s for the Round End Songs database.", g_sDatabaseName);
     }
     return INVALID_HANDLE;
 }
@@ -68,5 +118,7 @@ public OnConVarChanged(Handle:hConVar, const String:sOldValue[], const String:sN
         strcopy(g_sDatabaseName, sizeof(g_sDatabaseName), sNewValue);
     } else if (hConVar == g_hCTableName) {
         strcopy(g_sTableName, sizeof(g_sTableName), sNewValue);
+    } else if (hConVar == g_hCSongDir) {
+        strcopy(g_sSongDir, sizeof(g_sSongDir), sNewValue);
     }
 }
