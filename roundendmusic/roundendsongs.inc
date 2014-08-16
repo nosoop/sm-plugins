@@ -14,7 +14,7 @@ public SharedPlugin:__pl_roundendmusic = {
 };
 
 public __pl_roundendmusic_SetNTVOptional() {
-    // MarkNativeAsOptional("REM_AddToQueue"); // UNIMPLEMENTED
+    MarkNativeAsOptional("REM_AddToQueue");
 }
 
 functag SongSelector public();
@@ -34,3 +34,12 @@ forward Action:REM_OnSongsRequested(nSongs);
  * @noreturn
  */
 forward Action:REM_OnSongPlayed(String:sFilePath[]);
+
+/**
+ * Adds a song to the queue.
+ *
+ * @param sArtist                   Artist of the song.
+ * @param sTrack                    Title of the song.
+ * @param sFilePath                 File path excluding sound/
+ */
+native bool:REM_AddToQueue(const String:sArtist[], const String:sTrack[], const String:sFilePath[]);
