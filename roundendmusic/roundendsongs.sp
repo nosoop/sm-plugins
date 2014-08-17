@@ -7,7 +7,7 @@
 #include <sourcemod>
 #include <sdktools>
 
-#define PLUGIN_VERSION          "1.1.0"     // Plugin version.
+#define PLUGIN_VERSION          "1.1.1"     // Plugin version.
 
 #define ARRAY_ARTIST            0
 #define ARRAY_TITLE             1
@@ -77,6 +77,7 @@ public APLRes:AskPluginLoad2(Handle:hMySelf, bool:bLate, String:strError[], iMax
 }
 
 public OnMapStart() {
+    // TODO Fix calling when a song provider plugin hasn't been loaded yet?
 	QueueSongs();
 }
 
@@ -102,7 +103,7 @@ PlayEndRoundSong(iSong) {
     GetArrayString(g_hSongData[ARRAY_FILEPATH], iSong, sSoundPath, sizeof(sSoundPath));
     
     // Increase playcount.
-    SetArrayCell(g_hTrackNum, iSong, GetArrayCell(g_hTrackNum, iSong, 1) + 1, CELL_PLAYCOUNT);
+    SetArrayCell(g_hTrackNum, iSong, GetArrayCell(g_hTrackNum, iSong, CELL_PLAYCOUNT) + 1, CELL_PLAYCOUNT);
     
     // Play song.
     EmitSoundToAll(sSoundPath);
@@ -148,7 +149,7 @@ QueueSongs() {
     decl String:sSongPath[PLATFORM_MAX_PATH], String:sFilePath[PLATFORM_MAX_PATH];
     for (new i = 0; i < GetArraySize(g_hSongData[ARRAY_FILEPATH]); i++) {
         GetArrayString(g_hSongData[ARRAY_FILEPATH], i, sSongPath, sizeof(sSongPath));
-        PrecacheSound(sSongPath);
+        PrecacheSound(sSongPath, true);
         
         Format(sFilePath, sizeof(sFilePath), "sound/%s", sSongPath);
         AddFileToDownloadsTable(sFilePath);
@@ -231,8 +232,8 @@ public Action:Command_DisplaySongList(client, args) {
             for (new d = 0; d < 2; d++) {
                 GetArrayString(g_hSongData[d], i, rgsSongData[d], sizeof(rgsSongData[]));
             }
-            Format(sMenuBuffer, sizeof(sMenuBuffer),
-                    "'%s' from %s", rgsSongData[ARRAY_TITLE], rgsSongData[ARRAY_ARTIST]);
+            Format(sMenuBuffer, sizeof(sMenuBuffer), "'%s' from %s",
+                    rgsSongData[ARRAY_TITLE], rgsSongData[ARRAY_ARTIST]);
             // TODO restrict size of entry
             // TODO Spit detailed output to console.
             
@@ -256,5 +257,11 @@ public SongListHandler(Handle:menu, MenuAction:action, client, selection) {
 public OnConVarChanged(Handle:hConVar, const String:sOldValue[], const String:sNewValue[]) {
     if (hConVar == g_hCPluginEnabled) {
         bPluginEnabled = StringToInt(sNewValue) > 0;
+        
+        // Fixes bug when using Extended Map Configs.
+        // Requeue songs to preload and add songs to the download table.
+        if (bPluginEnabled) {
+            QueueSongs();
+        }
     }
 }
