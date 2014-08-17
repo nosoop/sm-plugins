@@ -7,7 +7,7 @@
 #include <sourcemod>
 #include <sdktools>
 
-#define PLUGIN_VERSION          "1.0.0"     // Plugin version.
+#define PLUGIN_VERSION          "1.1.0"     // Plugin version.
 
 #define ARRAY_ARTIST            0
 #define ARRAY_TITLE             1
@@ -36,12 +36,15 @@ new Handle:g_hSongData[3] = { INVALID_HANDLE, INVALID_HANDLE, INVALID_HANDLE };
 // Contains pointer to a shuffled track and a boolean to determine if the track was played this map.
 new Handle:g_hTrackNum = INVALID_HANDLE;
 
+new Handle:g_hCPluginEnabled = INVALID_HANDLE,  bool:bPluginEnabled = true; // Determines whether or not the plugin is enabled.
+
 new Handle:g_hFRequestSongs = INVALID_HANDLE,   // Global forward to notify that songs are needed.
     Handle:g_hFSongPlayed = INVALID_HANDLE;     // Global forward to notify that a song was played.
 
 public OnPluginStart() {
     // Initialize cvars and arrays.
-    // -- Plugin enabled (boolean).
+    g_hCPluginEnabled = CreateConVar("sm_rem_enabled", "1", "Enables Round End Music.", FCVAR_PLUGIN|FCVAR_SPONLY, true, 0.0, true, 1.0);
+    HookConVarChange(g_hCPluginEnabled, OnConVarChanged);
     // -- Number of songs to download (positive integer).
     // -- Reshuffle queued tracks (boolean)
     
@@ -63,6 +66,8 @@ public OnPluginStart() {
     // Init global forwards.
     g_hFRequestSongs = CreateGlobalForward("REM_OnSongsRequested", ET_Hook, Param_Cell);
     g_hFSongPlayed = CreateGlobalForward("REM_OnSongPlayed", ET_Ignore, Param_String);
+    
+    AutoExecConfig(true, "plugin.rem_core");
 }
 
 public APLRes:AskPluginLoad2(Handle:hMySelf, bool:bLate, String:strError[], iMaxErrors) {
@@ -85,6 +90,10 @@ public Action:Timer_PlayEndRound(Handle:timer, any:data) {
 }
 
 PlayEndRoundSong(iSong) {
+    if (!bPluginEnabled) {
+        return;
+    }
+
     decl String:sSongArtist[STR_ARTIST_LENGTH],
         String:sSongTitle[STR_TITLE_LENGTH],
         String:sSoundPath[PLATFORM_MAX_PATH];
@@ -109,6 +118,10 @@ PlayEndRoundSong(iSong) {
 }
 
 QueueSongs() {
+    if (!bPluginEnabled) {
+        return;
+    }
+
     // TODO Clear songs that have not been played (cvar configurable).
     new iSongCheck;
     while (g_nSongsAdded > iSongCheck) {
@@ -210,18 +223,23 @@ public Action:Command_DisplaySongList(client, args) {
     new Handle:hPanel = CreatePanel();
     SetPanelTitle(hPanel, "What we have playing on this map:\n(Unplayed songs roll over to the next map.)");
     
-    decl String:sMenuBuffer[64], String:rgsSongData[2][PLATFORM_MAX_PATH];
+    decl String:sMenuBuffer[64];
     
-    for (new i = 0; i < g_nSongsAdded; i++) {
-        for (new d = 0; d < 2; d++) {
-            GetArrayString(g_hSongData[d], i, rgsSongData[d], sizeof(rgsSongData[]));
+    if (bPluginEnabled) {
+        decl String:rgsSongData[2][PLATFORM_MAX_PATH];
+        for (new i = 0; i < g_nSongsAdded; i++) {
+            for (new d = 0; d < 2; d++) {
+                GetArrayString(g_hSongData[d], i, rgsSongData[d], sizeof(rgsSongData[]));
+            }
+            Format(sMenuBuffer, sizeof(sMenuBuffer),
+                    "'%s' from %s", rgsSongData[ARRAY_TITLE], rgsSongData[ARRAY_ARTIST]);
+            // TODO restrict size of entry
+            // TODO Spit detailed output to console.
+            
+            DrawPanelItem(hPanel, sMenuBuffer);
         }
-        Format(sMenuBuffer, sizeof(sMenuBuffer),
-                "'%s' from %s", rgsSongData[ARRAY_TITLE], rgsSongData[ARRAY_ARTIST]);
-        // TODO restrict size of entry
-        // TODO Spit detailed output to console.
-        
-        DrawPanelItem(hPanel, sMenuBuffer);
+    } else {
+        DrawPanelItem(hPanel, "Songs are currently disabled!");
     }
 
     SendPanelToClient(hPanel, client, SongListHandler, 20);
@@ -232,5 +250,11 @@ public Action:Command_DisplaySongList(client, args) {
 public SongListHandler(Handle:menu, MenuAction:action, client, selection) {
     if (action == MenuAction_Select) {
         // TODO ?
+    }
+}
+
+public OnConVarChanged(Handle:hConVar, const String:sOldValue[], const String:sNewValue[]) {
+    if (hConVar == g_hCPluginEnabled) {
+        bPluginEnabled = StringToInt(sNewValue) > 0;
     }
 }
