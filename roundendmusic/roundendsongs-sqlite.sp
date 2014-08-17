@@ -8,7 +8,7 @@
 #undef REQUIRE_PLUGIN                       // Support late loads.
 #include <roundendsongs>
 
-#define PLUGIN_VERSION          "0.1.0"     // Plugin version.
+#define PLUGIN_VERSION          "0.2.1"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "Round End Music (SQLite)",
@@ -28,21 +28,25 @@ new String:g_sRandomFunction[] = "(random() / 18446744073709551616 + 0.5)";
 
 public OnPluginStart() {
 
-    // Hook database.
     g_hCDatabaseName = CreateConVar("sm_rem_sqli_db", "roundendsongs", "Database entry in databases.cfg to load songs from.", FCVAR_PLUGIN|FCVAR_SPONLY);
-    GetConVarString(g_hCDatabaseName, g_sDatabaseName, sizeof(g_sDatabaseName));
-    HookConVarChange(g_hCDatabaseName, OnConVarChanged);
+    PrepareStringConVar(g_hCDatabaseName, g_sDatabaseName, sizeof(g_sDatabaseName));
     
     g_hCTableName = CreateConVar("sm_rem_sqli_tbl", "songdata", "Table to read songs from.", FCVAR_PLUGIN|FCVAR_SPONLY);
-    GetConVarString(g_hCTableName, g_sTableName, sizeof(g_sTableName));
-    HookConVarChange(g_hCTableName, OnConVarChanged);
+    PrepareStringConVar(g_hCTableName, g_sTableName, sizeof(g_sTableName));
     
     g_hCSongDir = CreateConVar("sm_rem_sqli_dir", "roundendsongs/", "Directory that the songs are located in, if not already defined as the full path in the database.", FCVAR_PLUGIN|FCVAR_SPONLY);
-    GetConVarString(g_hCSongDir, g_sSongDir, sizeof(g_sSongDir));
-    HookConVarChange(g_hCSongDir, OnConVarChanged);
+    PrepareStringConVar(g_hCSongDir, g_sSongDir, sizeof(g_sSongDir));
     
     // Execute configuration.
     AutoExecConfig(true, "plugin.rem_sqlite");
+}
+
+/**
+ * Get a String value from a ConVar, store into a String and hook changes.  Pretty self-explanatory.
+ */
+PrepareStringConVar(Handle:hConVar, String:sValue[], nValueSize) {
+    GetConVarString(hConVar, sValue, nValueSize);
+    HookConVarChange(hConVar, OnConVarChanged);
 }
 
 public Action:REM_OnSongsRequested(nSongs) {
