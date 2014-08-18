@@ -7,7 +7,7 @@
 #include <sourcemod>
 #include <sdktools>
 
-#define PLUGIN_VERSION          "1.1.1"     // Plugin version.
+#define PLUGIN_VERSION          "1.1.2"     // Plugin version.
 
 #define ARRAY_ARTIST            0
 #define ARRAY_TITLE             1
@@ -36,7 +36,7 @@ new Handle:g_hSongData[3] = { INVALID_HANDLE, INVALID_HANDLE, INVALID_HANDLE };
 // Contains pointer to a shuffled track and a boolean to determine if the track was played this map.
 new Handle:g_hTrackNum = INVALID_HANDLE;
 
-new Handle:g_hCPluginEnabled = INVALID_HANDLE,  bool:bPluginEnabled = true; // Determines whether or not the plugin is enabled.
+new Handle:g_hCPluginEnabled = INVALID_HANDLE,  bool:g_bPluginEnabled = true;   // Determines whether or not the plugin is enabled.
 
 new Handle:g_hFRequestSongs = INVALID_HANDLE,   // Global forward to notify that songs are needed.
     Handle:g_hFSongPlayed = INVALID_HANDLE;     // Global forward to notify that a song was played.
@@ -44,7 +44,6 @@ new Handle:g_hFRequestSongs = INVALID_HANDLE,   // Global forward to notify that
 public OnPluginStart() {
     // Initialize cvars and arrays.
     g_hCPluginEnabled = CreateConVar("sm_rem_enabled", "1", "Enables Round End Music.", FCVAR_PLUGIN|FCVAR_SPONLY, true, 0.0, true, 1.0);
-    HookConVarChange(g_hCPluginEnabled, OnConVarChanged);
     // -- Number of songs to download (positive integer).
     // -- Reshuffle queued tracks (boolean)
     
@@ -76,9 +75,12 @@ public APLRes:AskPluginLoad2(Handle:hMySelf, bool:bLate, String:strError[], iMax
     return APLRes_Success;
 }
 
-public OnMapStart() {
+public OnConfigsExecuted() {
+    // Only determine if we want to load things on map change.
+    g_bPluginEnabled = GetConVarBool(g_hCPluginEnabled);
+
     // TODO Fix calling when a song provider plugin hasn't been loaded yet?
-	QueueSongs();
+    QueueSongs();
 }
 
 public Event_RoundEnd(Handle:event, const String:name[], bool:dontBroadcast) {
@@ -91,7 +93,7 @@ public Action:Timer_PlayEndRound(Handle:timer, any:data) {
 }
 
 PlayEndRoundSong(iSong) {
-    if (!bPluginEnabled) {
+    if (!g_bPluginEnabled) {
         return;
     }
 
@@ -119,7 +121,7 @@ PlayEndRoundSong(iSong) {
 }
 
 QueueSongs() {
-    if (!bPluginEnabled) {
+    if (!g_bPluginEnabled) {
         return;
     }
 
@@ -226,7 +228,7 @@ public Action:Command_DisplaySongList(client, args) {
     
     decl String:sMenuBuffer[64];
     
-    if (bPluginEnabled) {
+    if (g_bPluginEnabled) {
         decl String:rgsSongData[2][PLATFORM_MAX_PATH];
         for (new i = 0; i < g_nSongsAdded; i++) {
             for (new d = 0; d < 2; d++) {
@@ -251,17 +253,5 @@ public Action:Command_DisplaySongList(client, args) {
 public SongListHandler(Handle:menu, MenuAction:action, client, selection) {
     if (action == MenuAction_Select) {
         // TODO ?
-    }
-}
-
-public OnConVarChanged(Handle:hConVar, const String:sOldValue[], const String:sNewValue[]) {
-    if (hConVar == g_hCPluginEnabled) {
-        bPluginEnabled = StringToInt(sNewValue) > 0;
-        
-        // Fixes bug when using Extended Map Configs.
-        // Requeue songs to preload and add songs to the download table.
-        if (bPluginEnabled) {
-            QueueSongs();
-        }
     }
 }
