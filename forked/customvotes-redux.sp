@@ -6,10 +6,10 @@
 
 // ====[ DEFINES ]=============================================================
 #define PLUGIN_NAME "Custom Votes"
-#define PLUGIN_VERSION "1.7"
-#define MAX_VOTE_TYPES 32
-#define MAX_VOTE_MAPS 128
-#define MAX_VOTE_OPTIONS 32
+#define PLUGIN_VERSION "1.1.0"
+#define MAX_VOTE_TYPES 8
+#define MAX_VOTE_MAPS 16
+#define MAX_VOTE_OPTIONS 8
 
 // ====[ HANDLES ]=============================================================
 new Handle:g_hArrayVotePlayerSteamID[MAXPLAYERS + 1][MAX_VOTE_TYPES];
@@ -51,6 +51,7 @@ new Float:g_flVoteRatio[MAX_VOTE_TYPES];
 new String:g_strVoteName[MAX_VOTE_TYPES][MAX_NAME_LENGTH];
 new String:g_strVoteConVar[MAX_VOTE_TYPES][MAX_NAME_LENGTH];
 new String:g_strVoteOverride[MAX_VOTE_TYPES][MAX_NAME_LENGTH];
+new String:g_strVoteIncludeMapPrefix[MAX_VOTE_TYPES][64];
 new String:g_strVoteCommand[MAX_VOTE_TYPES][255];
 new String:g_strVoteChatTrigger[MAX_VOTE_TYPES][255];
 new String:g_strVoteStartNotify[MAX_VOTE_TYPES][255];
@@ -74,7 +75,7 @@ enum VoteType
 public Plugin:myinfo =
 {
 	name = PLUGIN_NAME,
-	author = "ReFlexPoison",
+	author = "ReFlexPoison, nosoop",
 	description = PLUGIN_NAME,
 	version = PLUGIN_VERSION,
 	url = "http://www.sourcemod.net/"
@@ -399,9 +400,18 @@ public MenuHandler_Vote(Handle:hMenu, MenuAction:iAction, iVoter, iParam2)
 
 public Menu_PlayersVote(iVote, iVoter)
 {
+	decl String:strMap[MAX_NAME_LENGTH];
+	GetCurrentMap(strMap, sizeof(strMap));
+	SplitString(strMap, "_", strMap, sizeof(strMap));
+
 	if(IsVoteInProgress())
 	{
 		CPrintToChat(iVoter, "[SM] %t", "Vote in Progress");
+		return;
+	}
+	
+	if(StrContains(g_strVoteIncludeMapPrefix[iVote], strMap) == -1) {
+		CPrintToChat(iVoter, "[SM] %t", "Map Inapplicable");
 		return;
 	}
 
@@ -1073,9 +1083,18 @@ public VoteHandler_Map(Handle:hMenu, MenuAction:iAction, iVoter, iParam2)
 
 public Menu_ListVote(iVote, iVoter)
 {
+	decl String:strMap[MAX_NAME_LENGTH];
+	GetCurrentMap(strMap, sizeof(strMap));
+	SplitString(strMap, "_", strMap, sizeof(strMap));
+
 	if(IsVoteInProgress())
 	{
 		CPrintToChat(iVoter, "[SM] %t", "Vote in Progress");
+		return;
+	}
+	
+	if(StrContains(g_strVoteIncludeMapPrefix[iVote], strMap) == -1) {
+		CPrintToChat(iVoter, "[SM] %t", "Map Inapplicable");
 		return;
 	}
 
@@ -1357,9 +1376,18 @@ public VoteHandler_List(Handle:hMenu, MenuAction:iAction, iVoter, iParam2)
 
 public CastSimpleVote(iVote, iVoter)
 {
+	decl String:strMap[MAX_NAME_LENGTH];
+	GetCurrentMap(strMap, sizeof(strMap));
+	SplitString(strMap, "_", strMap, sizeof(strMap));
+
 	if(IsVoteInProgress())
 	{
 		CPrintToChat(iVoter, "[SM] %t", "Vote in Progress");
+		return;
+	}
+	
+	if(StrContains(g_strVoteIncludeMapPrefix[iVote], strMap) == -1) {
+		CPrintToChat(iVoter, "[SM] %t", "Map Inapplicable");
 		return;
 	}
 
@@ -1657,6 +1685,7 @@ public Config_Load()
 		strcopy(g_strVoteCallNotify[iVote], sizeof(g_strVoteCallNotify[]), "");
 		strcopy(g_strVotePassNotify[iVote], sizeof(g_strVotePassNotify[]), "");
 		strcopy(g_strVoteFailNotify[iVote], sizeof(g_strVoteFailNotify[]), "");
+		strcopy(g_strVoteIncludeMapPrefix[iVote], sizeof(g_strVoteIncludeMapPrefix[]), "");
 
 		for(new iVoter = 1; iVoter <= MaxClients; iVoter++)
 		{
@@ -1784,6 +1813,9 @@ public Config_Load()
 
 		// Printed to everyone's chat when the vote fails to pass
 		KvGetString(hKeyValues, "fail_notify", g_strVoteFailNotify[iVote], sizeof(g_strVoteFailNotify[]));
+		
+		// Restrict vote to following map prefixes.
+		KvGetString(hKeyValues, "include_maps", g_strVoteIncludeMapPrefix[iVote], sizeof(g_strVoteIncludeMapPrefix[]));
 
 		switch(g_iVoteType[iVote])
 		{
