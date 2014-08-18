@@ -7,7 +7,7 @@
 #include <sourcemod>
 #include <sdktools>
 
-#define PLUGIN_VERSION          "1.1.2"     // Plugin version.
+#define PLUGIN_VERSION          "1.1.3"     // Plugin version.
 
 #define ARRAY_ARTIST            0
 #define ARRAY_TITLE             1
@@ -110,14 +110,14 @@ PlayEndRoundSong(iSong) {
     // Play song.
     EmitSoundToAll(sSoundPath);
     
-    Call_StartForward(g_hFSongPlayed);
-    Call_PushString(sSoundPath);
-    Call_Finish();
-    
     // Show song information in chat.
     // TODO Nice coloring.
     PrintToChatAll("\x01You are listening to \x04%s\x01 from \x04%s\x01!", sSongTitle, sSongArtist);
     PrintToServer("[rem] Played song %d of %d (%s)", iSong + 1, g_nSongsAdded, sSoundPath);
+    
+    Call_StartForward(g_hFSongPlayed);
+    Call_PushString(sSoundPath);
+    Call_Finish();
 }
 
 QueueSongs() {
