@@ -7,7 +7,7 @@
 #include <sourcemod>
 #include <sdktools>
 
-#define PLUGIN_VERSION          "1.1.3"     // Plugin version.
+#define PLUGIN_VERSION          "1.2.0"     // Plugin version.
 
 #define ARRAY_ARTIST            0
 #define ARRAY_TITLE             1
@@ -17,8 +17,6 @@
 #define STR_TITLE_LENGTH        48          // Maximum length of a song title.
 
 #define CELL_PLAYCOUNT          1
-
-#define MAX_DOWNLOAD_COUNT      5           // Temporary.
 
 public Plugin:myinfo = {
     name = "Round End Music",
@@ -36,7 +34,8 @@ new Handle:g_hSongData[3] = { INVALID_HANDLE, INVALID_HANDLE, INVALID_HANDLE };
 // Contains pointer to a shuffled track and a boolean to determine if the track was played this map.
 new Handle:g_hTrackNum = INVALID_HANDLE;
 
-new Handle:g_hCPluginEnabled = INVALID_HANDLE,  bool:g_bPluginEnabled = true;   // Determines whether or not the plugin is enabled.
+new Handle:g_hCPluginEnabled = INVALID_HANDLE,  bool:g_bPluginEnabled = true,   // Determines whether or not the plugin is enabled.
+    Handle:g_hCMaxSongCount = INVALID_HANDLE,   g_nMaxSongCount;                // Determines the maximum number of songs to request.
 
 new Handle:g_hFRequestSongs = INVALID_HANDLE,   // Global forward to notify that songs are needed.
     Handle:g_hFSongPlayed = INVALID_HANDLE;     // Global forward to notify that a song was played.
@@ -44,7 +43,7 @@ new Handle:g_hFRequestSongs = INVALID_HANDLE,   // Global forward to notify that
 public OnPluginStart() {
     // Initialize cvars and arrays.
     g_hCPluginEnabled = CreateConVar("sm_rem_enabled", "1", "Enables Round End Music.", FCVAR_PLUGIN|FCVAR_SPONLY, true, 0.0, true, 1.0);
-    // -- Number of songs to download (positive integer).
+    g_hCMaxSongCount = CreateConVar("sm_rem_maxsongs", "3", "Maximum number of songs to download from a single map.", FCVAR_PLUGIN|FCVAR_SPONLY, true, 1.0);
     // -- Reshuffle queued tracks (boolean)
     
     // Register commands.
@@ -78,6 +77,7 @@ public APLRes:AskPluginLoad2(Handle:hMySelf, bool:bLate, String:strError[], iMax
 public OnConfigsExecuted() {
     // Only determine if we want to load things on map change.
     g_bPluginEnabled = GetConVarBool(g_hCPluginEnabled);
+    g_nMaxSongCount = GetConVarInt(g_hCMaxSongCount);
 
     // TODO Fix calling when a song provider plugin hasn't been loaded yet?
     QueueSongs();
@@ -139,11 +139,13 @@ QueueSongs() {
         }
     }
 
-    // Call global forward to request songs.
-    new Action:result;
-    Call_StartForward(g_hFRequestSongs);
-    Call_PushCell(MAX_DOWNLOAD_COUNT);
-    Call_Finish(result);
+    if (g_nSongsAdded < g_nMaxSongCount) {
+        // Request songs.
+        new Action:result;
+        Call_StartForward(g_hFRequestSongs);
+        Call_PushCell(g_nMaxSongCount);
+        Call_Finish(result);
+    }
     
     // Initialize shuffler.
     ClearArray(g_hTrackNum);
@@ -181,7 +183,7 @@ GetNextSong() {
  * Adds a song to the queue.  Returns true if the song was added, false otherwise.
  */
 bool:AddToQueue(const String:sArtist[], const String:sTrack[], const String:sFilePath[]) {
-    if (FindStringInArray(g_hSongData[ARRAY_FILEPATH], sFilePath) == -1 && g_nSongsAdded < MAX_DOWNLOAD_COUNT) {
+    if (FindStringInArray(g_hSongData[ARRAY_FILEPATH], sFilePath) == -1 && g_nSongsAdded < g_nMaxSongCount) {
         PushArrayString(g_hSongData[ARRAY_ARTIST], sArtist);
         PushArrayString(g_hSongData[ARRAY_TITLE], sTrack);
         PushArrayString(g_hSongData[ARRAY_FILEPATH], sFilePath);
