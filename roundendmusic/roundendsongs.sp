@@ -7,7 +7,7 @@
 #include <sourcemod>
 #include <sdktools>
 
-#define PLUGIN_VERSION          "1.2.0"     // Plugin version.
+#define PLUGIN_VERSION          "1.3.0"     // Plugin version.
 
 #define ARRAY_ARTIST            0
 #define ARRAY_TITLE             1
@@ -79,7 +79,6 @@ public OnConfigsExecuted() {
     g_bPluginEnabled = GetConVarBool(g_hCPluginEnabled);
     g_nMaxSongCount = GetConVarInt(g_hCMaxSongCount);
 
-    // TODO Fix calling when a song provider plugin hasn't been loaded yet?
     QueueSongs();
 }
 
@@ -107,11 +106,11 @@ PlayEndRoundSong(iSong) {
     // Increase playcount.
     SetArrayCell(g_hTrackNum, iSong, GetArrayCell(g_hTrackNum, iSong, CELL_PLAYCOUNT) + 1, CELL_PLAYCOUNT);
     
-    // Play song.
+    // TODO Client preference support to control volume.
     EmitSoundToAll(sSoundPath);
     
     // Show song information in chat.
-    // TODO Nice coloring.
+    // TODO Nice coloring?
     PrintToChatAll("\x01You are listening to \x04%s\x01 from \x04%s\x01!", sSongTitle, sSongArtist);
     PrintToServer("[rem] Played song %d of %d (%s)", iSong + 1, g_nSongsAdded, sSoundPath);
     
@@ -224,11 +223,11 @@ public Action:Command_RerollSongs(client, args) {
 }
 
 public Action:Command_DisplaySongList(client, args) {
-    // TODO Implement client-viewable song list plus detailed output in console.
-    new Handle:hPanel = CreatePanel();
-    SetPanelTitle(hPanel, "What we have playing on this map:\n(Unplayed songs roll over to the next map.)");
+    new Handle:hMenu = CreateMenu(SongListHandler, MENU_ACTIONS_DEFAULT);
+    SetMenuTitle(hMenu, "What we have playing on this map:\n(Unplayed songs roll over to the next map.)");
     
     decl String:sMenuBuffer[64];
+    decl String:sMenuItemBuffer[16];
     
     if (g_bPluginEnabled) {
         decl String:rgsSongData[2][PLATFORM_MAX_PATH];
@@ -241,19 +240,32 @@ public Action:Command_DisplaySongList(client, args) {
             // TODO restrict size of entry
             // TODO Spit detailed output to console.
             
-            DrawPanelItem(hPanel, sMenuBuffer);
+            Format(sMenuItemBuffer, sizeof(sMenuItemBuffer), "#songlist_%d", i);
+            AddMenuItem(hMenu, sMenuItemBuffer, sMenuBuffer);
         }
     } else {
-        DrawPanelItem(hPanel, "Songs are currently disabled!");
+        AddMenuItem(hMenu, "#songlist_disabled", "Songs are currently disabled!", ITEMDRAW_DISABLED);
     }
+    SetMenuExitButton(hMenu, true);
 
-    SendPanelToClient(hPanel, client, SongListHandler, 20);
-    CloseHandle(hPanel);
+    DisplayMenu(hMenu, client, 20);
     return Plugin_Handled;
 }
 
-public SongListHandler(Handle:menu, MenuAction:action, client, selection) {
-    if (action == MenuAction_Select) {
-        // TODO ?
+public SongListHandler(Handle:hMenu, MenuAction:hAction, client, selection) {
+    if (hAction == MenuAction_Select) {
+        decl String:sMenuSelected[16];
+        GetMenuItem(hMenu, selection, sMenuSelected, sizeof(sMenuSelected));
+        
+        decl String:sMenuItemBuffer[16];
+        for (new i = 0; i < g_nSongsAdded; i++) {
+            Format(sMenuItemBuffer, sizeof(sMenuItemBuffer), "#songlist_%d", i);
+            if (StrEqual(sMenuSelected, sMenuItemBuffer)) {
+                decl String:sSongPath[PLATFORM_MAX_PATH];
+                GetArrayString(g_hSongData[ARRAY_FILEPATH], i, sSongPath, sizeof(sSongPath));
+                
+                EmitSoundToClient(client, sSongPath);
+            }
+        }
     }
 }
