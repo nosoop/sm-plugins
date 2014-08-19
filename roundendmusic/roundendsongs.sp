@@ -6,8 +6,9 @@
 
 #include <sourcemod>
 #include <sdktools>
+#include <clientprefs>
 
-#define PLUGIN_VERSION          "1.3.0"     // Plugin version.
+#define PLUGIN_VERSION          "1.4.0"     // Plugin version.
 
 #define ARRAY_ARTIST            0
 #define ARRAY_TITLE             1
@@ -37,6 +38,9 @@ new Handle:g_hTrackNum = INVALID_HANDLE;
 new Handle:g_hCPluginEnabled = INVALID_HANDLE,  bool:g_bPluginEnabled = true,   // Determines whether or not the plugin is enabled.
     Handle:g_hCMaxSongCount = INVALID_HANDLE,   g_nMaxSongCount;                // Determines the maximum number of songs to request.
 
+// Client preferences on volume.  TODO Properly handle nonexistent clientprefs.
+new Handle:g_hVolumeCookie = INVALID_HANDLE,    Float:g_rgfClientVolume[MAXPLAYERS+1];
+
 new Handle:g_hFRequestSongs = INVALID_HANDLE,   // Global forward to notify that songs are needed.
     Handle:g_hFSongPlayed = INVALID_HANDLE;     // Global forward to notify that a song was played.
 
@@ -49,7 +53,9 @@ public OnPluginStart() {
     // Register commands.
     RegAdminCmd("sm_playsong", Command_PlaySong, ADMFLAG_ROOT, "Play a round-end song (for debugging).");
     RegAdminCmd("sm_rem_rerollsongs", Command_RerollSongs, ADMFLAG_ROOT, "Redo round end music (for debugging).");
+    
     RegConsoleCmd("sm_songlist", Command_DisplaySongList, "Opens a menu with the current song listing.");
+    RegConsoleCmd("sm_songvolume", Command_SetSongVolume, "Sets the client's volume level for music at round-end.");
     
     // Initialize the arrays.
     g_hSongData[ARRAY_ARTIST] = CreateArray(STR_ARTIST_LENGTH);
@@ -60,6 +66,15 @@ public OnPluginStart() {
     
     // Hook endround.
     HookEvent("teamplay_round_win", Event_RoundEnd);
+    
+    g_hVolumeCookie = RegClientCookie("RoundEndSongVolume", "Volume of songs played through the Round End Music plugin.", CookieAccess_Protected);
+    for (new i = MaxClients; i > 0; --i) {
+        if (!AreClientCookiesCached(i)) {
+            g_rgfClientVolume[i] = 1.0;
+            continue;
+        }
+        OnClientCookiesCached(i);
+    }
     
     // Init global forwards.
     g_hFRequestSongs = CreateGlobalForward("REM_OnSongsRequested", ET_Hook, Param_Cell);
@@ -73,6 +88,13 @@ public APLRes:AskPluginLoad2(Handle:hMySelf, bool:bLate, String:strError[], iMax
     CreateNative("REM_AddToQueue", Native_AddToQueue);
     return APLRes_Success;
 }
+
+public OnClientCookiesCached(client) {
+    decl String:sValue[8];
+    GetClientCookie(client, g_hVolumeCookie, sValue, sizeof(sValue));
+    
+    g_rgfClientVolume[client] = sValue[0] == '\0' ? 1.0 : StringToFloat(sValue);
+}  
 
 public OnConfigsExecuted() {
     // Only determine if we want to load things on map change.
@@ -106,12 +128,15 @@ PlayEndRoundSong(iSong) {
     // Increase playcount.
     SetArrayCell(g_hTrackNum, iSong, GetArrayCell(g_hTrackNum, iSong, CELL_PLAYCOUNT) + 1, CELL_PLAYCOUNT);
     
-    // TODO Client preference support to control volume.
-    EmitSoundToAll(sSoundPath);
+    for (new i = MaxClients; i > 0; --i) {
+        if (IsClientInGame(i) && g_rgfClientVolume[i] > 0.0) {
+            EmitSoundToClient(i, sSoundPath, _, _, _, _, g_rgfClientVolume[i]);
+            PrintToChat(i, "\x01You are listening to \x04%s\x01 from \x04%s\x01!", sSongTitle, sSongArtist);
+        }
+    }
     
     // Show song information in chat.
     // TODO Nice coloring?
-    PrintToChatAll("\x01You are listening to \x04%s\x01 from \x04%s\x01!", sSongTitle, sSongArtist);
     PrintToServer("[rem] Played song %d of %d (%s)", iSong + 1, g_nSongsAdded, sSoundPath);
     
     Call_StartForward(g_hFSongPlayed);
@@ -223,7 +248,7 @@ public Action:Command_RerollSongs(client, args) {
 }
 
 public Action:Command_DisplaySongList(client, args) {
-    new Handle:hMenu = CreateMenu(SongListHandler, MENU_ACTIONS_DEFAULT);
+    new Handle:hMenu = CreateMenu(MenuHandler_SongList, MENU_ACTIONS_DEFAULT);
     SetMenuTitle(hMenu, "What we have playing on this map:\n(Unplayed songs roll over to the next map.)");
     
     decl String:sMenuBuffer[64];
@@ -252,7 +277,7 @@ public Action:Command_DisplaySongList(client, args) {
     return Plugin_Handled;
 }
 
-public SongListHandler(Handle:hMenu, MenuAction:hAction, client, selection) {
+public MenuHandler_SongList(Handle:hMenu, MenuAction:hAction, client, selection) {
     if (hAction == MenuAction_Select) {
         decl String:sMenuSelected[16];
         GetMenuItem(hMenu, selection, sMenuSelected, sizeof(sMenuSelected));
@@ -264,8 +289,53 @@ public SongListHandler(Handle:hMenu, MenuAction:hAction, client, selection) {
                 decl String:sSongPath[PLATFORM_MAX_PATH];
                 GetArrayString(g_hSongData[ARRAY_FILEPATH], i, sSongPath, sizeof(sSongPath));
                 
-                EmitSoundToClient(client, sSongPath);
+                EmitSoundToClient(client, sSongPath, _, _, _, _, g_rgfClientVolume[client]);
             }
         }
+    }
+}
+
+public Action:Command_SetSongVolume(client, args) {
+    if (args > 0) {
+        decl String:sVolumeBuffer[8];
+        GetCmdArg(1, sVolumeBuffer, sizeof(sVolumeBuffer));
+        
+        new Float:fVolumeLevel = StringToFloat(sVolumeBuffer);
+        SetClientVolumeLevel(client,
+                fVolumeLevel > 1.0 ? 1.0 : ( fVolumeLevel < 0.0 ? 0.0 : fVolumeLevel ));
+    } else {
+        new Handle:hPanel = CreatePanel();
+        SetPanelTitle(hPanel, "Song volume:");
+        
+        decl String:sVolumeDisplay[24];
+        for (new i = 10; i > 0; i -= 2) {
+            Format(sVolumeDisplay, sizeof(sVolumeDisplay), "%d%% Volume", i * 10);
+            DrawPanelItem(hPanel, sVolumeDisplay);
+        }
+        DrawPanelItem(hPanel, "Disable Round End Music");
+
+        SendPanelToClient(hPanel, client, MenuHandler_SongVolume, 20);
+        CloseHandle(hPanel);
+    }
+}
+
+public MenuHandler_SongVolume(Handle:menu, MenuAction:action, client, selection) {
+    if (action == MenuAction_Select) {
+        new Float:fVolumeLevel = 0.2 * (6 - selection);    // Menu selection is 1-index-based, so we subtract one.
+        SetClientVolumeLevel(client, fVolumeLevel);
+    }
+}
+
+SetClientVolumeLevel(client, Float:fVolumeLevel) {
+    decl String:sVolumeLevel[8];
+    Format(sVolumeLevel, sizeof(sVolumeLevel), "%f", fVolumeLevel);
+    
+    g_rgfClientVolume[client] = fVolumeLevel;
+    SetClientCookie(client, g_hVolumeCookie, sVolumeLevel);
+    
+    if (fVolumeLevel > 0.0) {
+        PrintToChat(client, "[SM] Round End Music volume set to %01.2f.", fVolumeLevel);
+    } else {
+        PrintToChat(client, "[SM] Round End Music muted.");
     }
 }
