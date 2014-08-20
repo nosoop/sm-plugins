@@ -8,7 +8,7 @@
 #include <sdktools>
 #include <clientprefs>
 
-#define PLUGIN_VERSION          "1.4.0"     // Plugin version.
+#define PLUGIN_VERSION          "1.4.1"     // Plugin version.
 
 #define ARRAY_ARTIST            0
 #define ARRAY_TITLE             1
@@ -305,14 +305,18 @@ public Action:Command_SetSongVolume(client, args) {
                 fVolumeLevel > 1.0 ? 1.0 : ( fVolumeLevel < 0.0 ? 0.0 : fVolumeLevel ));
     } else {
         new Handle:hPanel = CreatePanel();
-        SetPanelTitle(hPanel, "Song volume:");
+        
+        decl String:sPanelTitle[48];
+        Format(sPanelTitle, sizeof(sPanelTitle), "Song volume (currently %01.2f):", g_rgfClientVolume[client]);
+        SetPanelTitle(hPanel, sPanelTitle);
         
         decl String:sVolumeDisplay[24];
         for (new i = 10; i > 0; i -= 2) {
             Format(sVolumeDisplay, sizeof(sVolumeDisplay), "%d%% Volume", i * 10);
             DrawPanelItem(hPanel, sVolumeDisplay);
         }
-        DrawPanelItem(hPanel, "Disable Round End Music");
+        DrawPanelItem(hPanel, "Disable Round End Music");   // Option 6
+        DrawPanelItem(hPanel, "Cancel");                    // Option 7
 
         SendPanelToClient(hPanel, client, MenuHandler_SongVolume, 20);
         CloseHandle(hPanel);
@@ -321,8 +325,10 @@ public Action:Command_SetSongVolume(client, args) {
 
 public MenuHandler_SongVolume(Handle:menu, MenuAction:action, client, selection) {
     if (action == MenuAction_Select) {
-        new Float:fVolumeLevel = 0.2 * (6 - selection);    // Menu selection is 1-index-based, so we subtract one.
-        SetClientVolumeLevel(client, fVolumeLevel);
+        if (selection != 7) {
+            new Float:fVolumeLevel = 0.2 * (6 - selection);    // Menu selection is 1-index-based, so we subtract one.
+            SetClientVolumeLevel(client, fVolumeLevel);
+        }
     }
 }
 
