@@ -8,7 +8,7 @@
 #include <sdktools>
 #include <clientprefs>
 
-#define PLUGIN_VERSION          "1.4.1"     // Plugin version.
+#define PLUGIN_VERSION          "1.4.2"     // Plugin version.
 
 #define ARRAY_ARTIST            0
 #define ARRAY_TITLE             1
@@ -321,6 +321,7 @@ public Action:Command_SetSongVolume(client, args) {
         SendPanelToClient(hPanel, client, MenuHandler_SongVolume, 20);
         CloseHandle(hPanel);
     }
+    return Plugin_Handled;
 }
 
 public MenuHandler_SongVolume(Handle:menu, MenuAction:action, client, selection) {
