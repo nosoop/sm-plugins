@@ -18,7 +18,7 @@
 #include <tf2_stocks>
 #include <propify>
 
-#define PLUGIN_VERSION          "2.3.6"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.3.7"     // Plugin version.  Am I doing semantic versioning right?
 
                                             // In humiliation...
 #define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
@@ -208,7 +208,7 @@ public Hook_PostPlayerHurt(Handle:event, const String:name[], bool:dontBroadcast
     new client = GetClientOfUserId(GetEventInt(event, "userid"));
     new attacker = GetClientOfUserId(GetEventInt(event, "attacker"));
     
-    if (g_bIsPlayerGlowing[client]) {
+    if (g_bIsPlayerGlowing[client] || !Propify_IsClientProp(client)) {
         return;
     }
     
