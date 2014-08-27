@@ -96,6 +96,19 @@ forward Propify_OnModelAdded(const String:sModelName[], const String:sModelPath[
  */
 forward Propify_OnModelRemoved(const String:sModelName[], const String:sModelPath[]);
 
+/**
+ * Called when a client is attempting to toggle prop locking.
+ *
+ * @return                  Plugin_Continue to allow the client to lock prop, Plugin_Handled to disable.
+ */
+forward Action:Propify_OnSetPropLock(client);
+
+/**
+ * Called when a client is attempting to toggle third-person mode while being a prop.
+ *
+ * @return                  Plugin_Continue to allow the client to use third-person while propped, Plugin_Handled to disable.
+ */
+forward Action:Propify_OnSetThirdPerson(client);
 
 /**
  * Attempts to set a prop on a player.

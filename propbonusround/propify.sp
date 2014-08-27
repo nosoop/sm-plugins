@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "3.5.4"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "3.6.0"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -95,7 +95,9 @@ new Handle:g_hForwardOnPropified,       // Turned a player into a prop or out of
     Handle:g_hForwardOnPropListCleared, // Cleared existing prop list and starting fresh.
     Handle:g_hForwardOnPropListLoaded,  // Finished loading model list.
     Handle:g_hForwardOnModelAdded,      // External plugin added a prop.
-    Handle:g_hForwardOnModelRemoved;    // External plugin removed a prop.
+    Handle:g_hForwardOnModelRemoved,    // External plugin removed a prop.
+    Handle:g_hForwardOnSetPropLock,     // Planning to set prop lock.
+    Handle:g_hForwardOnSetThirdPerson;  // Planning to set prop lock.
 
 public OnPluginStart() {
     new String:strGame[10];
@@ -131,6 +133,8 @@ public OnPluginStart() {
     g_hForwardOnPropListLoaded = CreateGlobalForward("Propify_OnPropListLoaded", ET_Ignore);
     g_hForwardOnModelAdded = CreateGlobalForward("Propify_OnModelAdded", ET_Ignore, Param_String, Param_String);
     g_hForwardOnModelRemoved = CreateGlobalForward("Propify_OnModelRemoved", ET_Ignore, Param_String, Param_String);
+    g_hForwardOnSetPropLock = CreateGlobalForward("Propify_OnSetPropLock", ET_Event, Param_Cell);
+    g_hForwardOnSetPropLock = CreateGlobalForward("Propify_OnSetThirdPerson", ET_Event, Param_Cell);
     
     // Register own plugin's config handlers.
     RegisterConfigHandler(INVALID_HANDLE, "proplist", ConfigHandler_PropList, ConfigHandler_All);
@@ -558,9 +562,17 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
         // +attack toggles prop locking.
         if ((buttons & IN_ATTACK) == IN_ATTACK) {
             if (!g_bRecentlySetPropLock[client]) {
-                SetPropLockState(client, !g_bIsPropLocked[client]);
+                decl Action:callResult;
+                Call_StartForward(g_hForwardOnSetPropLock);
+                Call_PushCell(client);
+                Call_Finish(callResult);
+                
+                if (callResult != Plugin_Handled) {
+                    SetPropLockState(client, !g_bIsPropLocked[client]);
+                }
                 
                 // Lock in the proplock settings for one second, as this code path is reached while +attack is held.
+                // We don't want to have to call the global forward every tick.
                 g_bRecentlySetPropLock[client] = true;
                 CreateTimer(1.0, UnsetPropLockToggleDelay, client);
             }
@@ -569,8 +581,15 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
         // +attack2 toggles third-person state.
         if ((buttons & IN_ATTACK2) == IN_ATTACK2) {
             if (!g_bRecentlySetThirdPerson[client]) {
-                SetThirdPerson(client, !g_bIsInThirdPerson[client], g_bUseDirtyHackForThirdPerson);
-                PrintHintText(client, "%s third person mode.", g_bIsInThirdPerson[client] ? "Enabled" : "Disabled");
+                decl Action:callResult;
+                Call_StartForward(g_hForwardOnSetThirdPerson);
+                Call_PushCell(client);
+                Call_Finish(callResult);
+                
+                if (callResult != Plugin_Handled) {
+                    SetThirdPerson(client, !g_bIsInThirdPerson[client], g_bUseDirtyHackForThirdPerson);
+                    PrintHintText(client, "%s third person mode.", g_bIsInThirdPerson[client] ? "Enabled" : "Disabled");
+                }
                 
                 // Lock in the third-person settings for a second, for the same reason as proplock.
                 g_bRecentlySetThirdPerson[client] = true;
@@ -637,6 +656,8 @@ public Action:UnsetPropLockToggleDelay(Handle:timer, any:client) {
     // Clear lock on proplock settings.
     g_bRecentlySetPropLock[client] = false;
 }
+
+// TODO Create Native_SetPropLockState(...)
 
 /**
  * Sets third-person mode.
