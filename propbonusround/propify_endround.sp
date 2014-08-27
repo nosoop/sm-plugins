@@ -18,7 +18,7 @@
 #include <tf2_stocks>
 #include <propify>
 
-#define PLUGIN_VERSION          "2.3.7"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.4.0"     // Plugin version.  Am I doing semantic versioning right?
 
                                             // In humiliation...
 #define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
@@ -42,8 +42,7 @@ new Handle:g_hCPluginEnabled = INVALID_HANDLE,      bool:g_bPluginEnabled,      
     Handle:g_hCAdminOnly = INVALID_HANDLE,          bool:g_bAdminOnly,          // sm_propbonus_adminonly
     Handle:g_hCAnnouncePropRound = INVALID_HANDLE,  bool:g_bAnnouncePropRound,  // sm_propbonus_announcement
     Handle:g_hCDmgUnprops = INVALID_HANDLE,         g_iDmgUnprops,              // sm_propbonus_damageunprops
-    Handle:g_hCHumiliationRespawn = INVALID_HANDLE, bool:g_bHumiliationRespawn, // sm_propbonus_forcespawn
-    Handle:g_hCTargetRound = INVALID_HANDLE,        Float:g_fTargetRound;       // sm_propbonus_targetroundchance    
+    Handle:g_hCHumiliationRespawn = INVALID_HANDLE, bool:g_bHumiliationRespawn; // sm_propbonus_forcespawn
 
 // Check plugin-controlled glow state.
 new bool:g_bIsPlayerGlowing[MAXPLAYERS + 1];
@@ -55,26 +54,6 @@ new bool:g_bIsPlayerAdmin[MAXPLAYERS + 1];
 new bool:g_bBonusRound, TFTeam:g_iWinningTeam;
 
 new String:g_sCharAdminFlag[32];
-
-// Special target practice round -- all players are turned into the training targets of their respective class.
-new bool:g_bTargetPracticeAvailable;        // If the special mode is available.  Requires all the prop models to be loaded.
-new rg_iClassModels[9];                     // The indices of the class models in the prop list.
-new String:rg_sClassModelPaths[][] = {      // Paths of models to check for, in class ordinal order so we can just pass the player's current class int value imto the array.
-    "models/props_training/target_scout.mdl",
-    "models/props_training/target_sniper.mdl",
-    "models/props_training/target_soldier.mdl",
-    "models/props_training/target_demoman.mdl",
-    "models/props_training/target_medic.mdl",
-    "models/props_training/target_heavy.mdl",
-    "models/props_training/target_pyro.mdl",    
-    "models/props_training/target_spy.mdl",
-    "models/props_training/target_engineer.mdl"
-};
-
-enum BonusRoundMode {
-    BonusRoundMode_Normal = 0,
-    BonusRoundMode_TargetPractice = 1
-};
 
 new Handle:rg_SpawnPositions;
 
@@ -105,9 +84,6 @@ public OnPluginStart() {
     g_hCHumiliationRespawn = CreateConVar("sm_propbonus_forcespawn", "0", "Whether or not dead players are respawned and turned into a prop.", _, true, 0.0, true, 1.0);
     HookConVarChange(g_hCHumiliationRespawn, Cvars_Changed);
     
-    g_hCTargetRound = CreateConVar("sm_propbonus_targetroundchance", "0.0", "Chance that the bonus round will make all losing players wooden targets.", _, true, 0.0, true, 1.0);
-    HookConVarChange(g_hCTargetRound, Cvars_Changed);
-        
     // Hook round events to set and unset props.
     HookPropBonusRoundPluginEvents(true);
 
@@ -125,27 +101,11 @@ public OnAllPluginsLoaded() {
     
     if (g_bIsPropifyLoaded) {
         Propify_RegisterConfigHandler("spawnpos", ConfigHandler_SpawnPositions);
-        Propify_OnPropListLoaded();
     }
 }
 
 public Propify_OnPropListCleared() {
     ClearArray(rg_SpawnPositions);
-}
-
-public Propify_OnPropListLoaded() {
-    g_bTargetPracticeAvailable = false;
-    
-    new Handle:hModelPaths = Propify_GetModelPathsArray();
-    if (hModelPaths != INVALID_HANDLE) {
-        g_bTargetPracticeAvailable = true;
-        for (new i = 0; i < sizeof(rg_sClassModelPaths); i++) {
-            rg_iClassModels[i] = FindStringInArray(hModelPaths, rg_sClassModelPaths[i]);
-            
-            // We keep the mode enabled if we find the model to use.
-            g_bTargetPracticeAvailable &= (rg_iClassModels[i] > -1);
-        }
-    }
 }
 
 // ConfigHandler -- reads key "x y z" and angle "yaw" to spawn in
@@ -235,10 +195,6 @@ public Hook_PostRoundWin(Handle:event, const String:name[], bool:dontBroadcast) 
 }
 
 public Action:Timer_EquipProps(Handle:timer) {
-    // Roll for any special modes.
-    new BonusRoundMode:iMode = (GetRandomFloat() < g_fTargetRound * _:g_bTargetPracticeAvailable) ?
-            BonusRoundMode_TargetPractice : BonusRoundMode_Normal;
-
     for (new x = 1; x <= MaxClients; x++) {
         new bool:bClientJustRespawned;
         
@@ -282,7 +238,7 @@ public Action:Timer_EquipProps(Handle:timer) {
                 AcceptEntityInput(hRagdoll, "kill");
             }
             
-            EndRoundPropPlayer(x, bClientJustRespawned, iMode);
+            Propify_PropPlayer(x, _, bClientJustRespawned);
             
             if (g_iWinningTeam != TFTeam_Unassigned) {
                 PrintCenterText(x, "You've been turned into a prop!  Blend in!");
@@ -308,19 +264,6 @@ TeleportToRandomSpawnLocation(client) {
     ang[0] = selectedSpawn[3]; ang[1] = selectedSpawn[4];
     
     TeleportEntity(client, pos, ang, NULL_VECTOR);
-}
-
-EndRoundPropPlayer(client, bool:bClientJustRespawned, BonusRoundMode:iMode) {
-    // Prop the player based on the mode.
-    switch (iMode) {
-        case BonusRoundMode_Normal: {
-            Propify_PropPlayer(client, _, bClientJustRespawned);
-        }
-        case BonusRoundMode_TargetPractice: {
-            new iClassPropIndex = rg_iClassModels[_:TF2_GetPlayerClass(client) - 1];
-            Propify_PropPlayer(client, iClassPropIndex, bClientJustRespawned);
-        }
-    }
 }
 
 public Hook_PostRoundStart(Handle:event, const String:name[], bool:dontBroadcast) {
@@ -419,7 +362,5 @@ public Cvars_Changed(Handle:convar, const String:oldValue[], const String:newVal
         g_bAnnouncePropRound = StringToInt(newValue) != 0;
     } else if (convar == g_hCHumiliationRespawn) {
         g_bHumiliationRespawn = StringToInt(newValue) != 0;
-    } else if (convar == g_hCTargetRound) {
-        g_fTargetRound = StringToFloat(newValue);
     }
 }
