@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "3.6.0"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "3.6.1"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -134,7 +134,7 @@ public OnPluginStart() {
     g_hForwardOnModelAdded = CreateGlobalForward("Propify_OnModelAdded", ET_Ignore, Param_String, Param_String);
     g_hForwardOnModelRemoved = CreateGlobalForward("Propify_OnModelRemoved", ET_Ignore, Param_String, Param_String);
     g_hForwardOnSetPropLock = CreateGlobalForward("Propify_OnSetPropLock", ET_Event, Param_Cell);
-    g_hForwardOnSetPropLock = CreateGlobalForward("Propify_OnSetThirdPerson", ET_Event, Param_Cell);
+    g_hForwardOnSetThirdPerson = CreateGlobalForward("Propify_OnSetThirdPerson", ET_Event, Param_Cell);
     
     // Register own plugin's config handlers.
     RegisterConfigHandler(INVALID_HANDLE, "proplist", ConfigHandler_PropList, ConfigHandler_All);
@@ -562,7 +562,7 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
         // +attack toggles prop locking.
         if ((buttons & IN_ATTACK) == IN_ATTACK) {
             if (!g_bRecentlySetPropLock[client]) {
-                decl Action:callResult;
+                new Action:callResult = Plugin_Continue;
                 Call_StartForward(g_hForwardOnSetPropLock);
                 Call_PushCell(client);
                 Call_Finish(callResult);
@@ -581,7 +581,7 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
         // +attack2 toggles third-person state.
         if ((buttons & IN_ATTACK2) == IN_ATTACK2) {
             if (!g_bRecentlySetThirdPerson[client]) {
-                decl Action:callResult;
+                new Action:callResult = Plugin_Continue;
                 Call_StartForward(g_hForwardOnSetThirdPerson);
                 Call_PushCell(client);
                 Call_Finish(callResult);
