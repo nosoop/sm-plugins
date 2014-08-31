@@ -8,7 +8,7 @@
 #include <sdktools>
 #include <clientprefs>
 
-#define PLUGIN_VERSION          "1.4.2"     // Plugin version.
+#define PLUGIN_VERSION          "1.4.3"     // Plugin version.
 
 #define ARRAY_ARTIST            0
 #define ARRAY_TITLE             1
@@ -36,7 +36,7 @@ new Handle:g_hSongData[3] = { INVALID_HANDLE, INVALID_HANDLE, INVALID_HANDLE };
 new Handle:g_hTrackNum = INVALID_HANDLE;
 
 new Handle:g_hCPluginEnabled = INVALID_HANDLE,  bool:g_bPluginEnabled = true,   // Determines whether or not the plugin is enabled.
-    Handle:g_hCMaxSongCount = INVALID_HANDLE,   g_nMaxSongCount;                // Determines the maximum number of songs to request.
+    Handle:g_hCMaxSongCount = INVALID_HANDLE,   g_nMaxSongsLoaded;              // Determines the maximum number of songs to request.
 
 // Client preferences on volume.  TODO Properly handle nonexistent clientprefs.
 new Handle:g_hVolumeCookie = INVALID_HANDLE,    Float:g_rgfClientVolume[MAXPLAYERS+1];
@@ -99,7 +99,7 @@ public OnClientCookiesCached(client) {
 public OnConfigsExecuted() {
     // Only determine if we want to load things on map change.
     g_bPluginEnabled = GetConVarBool(g_hCPluginEnabled);
-    g_nMaxSongCount = GetConVarInt(g_hCMaxSongCount);
+    g_nMaxSongsLoaded = GetConVarInt(g_hCMaxSongCount);
 
     QueueSongs();
 }
@@ -137,7 +137,7 @@ PlayEndRoundSong(iSong) {
     
     // Show song information in chat.
     // TODO Nice coloring?
-    PrintToServer("[rem] Played song %d of %d (%s)", iSong + 1, g_nSongsAdded, sSoundPath);
+    PrintToServer("[rem] Played song %d of %d (%s)", iSong + 1, GetActiveSongCount(), sSoundPath);
     
     Call_StartForward(g_hFSongPlayed);
     Call_PushString(sSoundPath);
@@ -149,25 +149,27 @@ QueueSongs() {
         return;
     }
 
-    // TODO Clear songs that have not been played (cvar configurable).
-    new iSongCheck;
-    while (g_nSongsAdded > iSongCheck) {
+    // Account for possible change in max download amount by keeping track of each separately here.
+    new iSongCheck, nSongsLastActive = GetArraySize(g_hTrackNum);
+    while (nSongsLastActive > iSongCheck) {
         if (GetArrayCell(g_hTrackNum, iSongCheck, CELL_PLAYCOUNT) > 0) {
             for (new i = 0; i < 3; i++) {
                 RemoveFromArray(g_hSongData[i], iSongCheck);
             }
             RemoveFromArray(g_hTrackNum, iSongCheck);
+            
             g_nSongsAdded--;
+            nSongsLastActive--;
         } else {
             iSongCheck++;
         }
     }
 
-    if (g_nSongsAdded < g_nMaxSongCount) {
+    if (g_nSongsAdded < g_nMaxSongsLoaded) {
         // Request songs.
         new Action:result;
         Call_StartForward(g_hFRequestSongs);
-        Call_PushCell(g_nMaxSongCount);
+        Call_PushCell(g_nMaxSongsLoaded);
         Call_Finish(result);
     }
     
@@ -175,7 +177,7 @@ QueueSongs() {
     ClearArray(g_hTrackNum);
     
     decl String:sSongPath[PLATFORM_MAX_PATH], String:sFilePath[PLATFORM_MAX_PATH];
-    for (new i = 0; i < GetArraySize(g_hSongData[ARRAY_FILEPATH]); i++) {
+    for (new i = 0; i < GetActiveSongCount(); i++) {
         GetArrayString(g_hSongData[ARRAY_FILEPATH], i, sSongPath, sizeof(sSongPath));
         PrecacheSound(sSongPath, true);
         
@@ -190,16 +192,25 @@ QueueSongs() {
     
     // Shuffle pointers with Fisher-Yates.  Source because I don't know it off the top of my head:
     // http://spin.atomicobject.com/2014/08/11/fisher-yates-shuffle-randomization-algorithm/
-    new nTracks = GetArraySize(g_hTrackNum);
+    new nTracks = GetActiveSongCount();
     for (new i = 0; i < nTracks; i++) {
         new j = GetRandomInt(i, nTracks - 1);
         SwapArrayItems(g_hTrackNum, i, j);
     }
 }
 
+/**
+ * GetActiveSongCount returns the lower of g_nSongsAdded and g_nMaxSongsLoaded.
+ * This matters in the event that g_nMaxSongsLoaded is changed to be smaller than g_nSongsAdded,
+ * in which case the song plugin should limit the songs to the max song count.
+ */
+GetActiveSongCount() {
+    return g_nSongsAdded < g_nMaxSongsLoaded ? g_nSongsAdded : g_nMaxSongsLoaded;
+}
+
 GetNextSong() {
     new iTrack = GetArrayCell(g_hTrackNum, g_iTrack++);
-    g_iTrack %= g_nSongsAdded;
+    g_iTrack %= GetActiveSongCount();
     return iTrack;
 }
 
@@ -207,7 +218,8 @@ GetNextSong() {
  * Adds a song to the queue.  Returns true if the song was added, false otherwise.
  */
 bool:AddToQueue(const String:sArtist[], const String:sTrack[], const String:sFilePath[]) {
-    if (FindStringInArray(g_hSongData[ARRAY_FILEPATH], sFilePath) == -1 && g_nSongsAdded < g_nMaxSongCount) {
+    // Limit songs added to max song count and automatically discard duplicates.
+    if (FindStringInArray(g_hSongData[ARRAY_FILEPATH], sFilePath) == -1 && g_nSongsAdded < g_nMaxSongsLoaded) {
         PushArrayString(g_hSongData[ARRAY_ARTIST], sArtist);
         PushArrayString(g_hSongData[ARRAY_TITLE], sTrack);
         PushArrayString(g_hSongData[ARRAY_FILEPATH], sFilePath);
@@ -232,7 +244,7 @@ public Action:Command_PlaySong(client, args) {
     if (args > 0) {
         decl String:num[4];
         GetCmdArg(1, num, sizeof(num));
-        iTrack = StringToInt(num) % g_nSongsAdded;
+        iTrack = StringToInt(num) % GetActiveSongCount();
     } else {
         iTrack = GetNextSong();
     }
@@ -256,7 +268,7 @@ public Action:Command_DisplaySongList(client, args) {
     
     if (g_bPluginEnabled) {
         decl String:rgsSongData[2][PLATFORM_MAX_PATH];
-        for (new i = 0; i < g_nSongsAdded; i++) {
+        for (new i = 0; i < GetActiveSongCount(); i++) {
             for (new d = 0; d < 2; d++) {
                 GetArrayString(g_hSongData[d], i, rgsSongData[d], sizeof(rgsSongData[]));
             }
@@ -283,7 +295,7 @@ public MenuHandler_SongList(Handle:hMenu, MenuAction:hAction, client, selection)
         GetMenuItem(hMenu, selection, sMenuSelected, sizeof(sMenuSelected));
         
         decl String:sMenuItemBuffer[16];
-        for (new i = 0; i < g_nSongsAdded; i++) {
+        for (new i = 0; i < GetActiveSongCount(); i++) {
             Format(sMenuItemBuffer, sizeof(sMenuItemBuffer), "#songlist_%d", i);
             if (StrEqual(sMenuSelected, sMenuItemBuffer)) {
                 decl String:sSongPath[PLATFORM_MAX_PATH];
