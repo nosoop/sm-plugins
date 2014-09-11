@@ -2,6 +2,10 @@
  * Sourcemod Plugin Template
  */
 
+// This plugin is intended for use with Halloween enabled.
+// The following Stripper:Source filter will enable the Spellbook UI to work properly.
+// http://pikatf2.serverpit.com/tf/configfiles/strippersource/_global_filters.cfg
+
 #pragma semicolon 1
 
 #include <sourcemod>
@@ -10,42 +14,17 @@
 #include <tf2items_giveweapon>
 #include <morecolors>
 
-#define PLUGIN_VERSION          "0.2.0"     // Plugin version.
+#define PLUGIN_VERSION          "1.0.0"     // Plugin version.
 
 public Plugin:myinfo = {
-    name = "[TF2] Unofficial Spell Handler",
+    name = "[TF2] Free Magazines",
     author = "nosoop",
     description = "Plugin to handle Halloween spells because Valve won't!",
     version = PLUGIN_VERSION,
     url = "http://github.com/nosoop"
 }
 
-public String:spellnames[12][32] = {
-    "Fireball",
-    "Swarm of Bats",
-    "Overheal",
-    "Pumpkin MIRV",
-    "Blast Jump",
-    "Stealth",
-    "Shadow Leap (Instantarium)",
-    "Ball o' Lightning",
-    "Tiny and Athletic",
-    "MONOCULUS!",
-    "Meteor Shower",
-    "Skeleton Horde"
-};
-
-public String:sSpellColor[][] = {
-    "{LIGHTGREEN}", "{UNUSUAL}"
-};
-
-public String:tickSound[][] = {
-    "misc/halloween/spelltick_02.wav",
-    "misc/halloween/spelltick_01.wav",
-    "misc/halloween/spelltick_set.wav"
-};
-
-new Float:rg_fLastSpellPickup[MAXPLAYERS+1], rg_nSpellTick[MAXPLAYERS+1];
+new g_rgiClientNotified[MAXPLAYERS+1];
 
 public OnPluginStart() {
     CreateConVar("tf_spellbookcmds_version", PLUGIN_VERSION, "[TF2] Faux Spells version", FCVAR_NOTIFY|FCVAR_PLUGIN);
@@ -53,7 +32,8 @@ public OnPluginStart() {
     
     RegAdminCmd("sm_spawnspellbook", Command_CreateSpell, ADMFLAG_GENERIC, "Spawns a spellbook.");
     
-    // Custom spellbooks, one for most classes, another for Engineer / Spy.
+    // Custom spellbooks, one for most classes, another for Engineer / Spy (since slot 4 is their PDA).
+    // TODO Avoid conflicts with existing items another way?
     if (!TF2Items_CheckWeapon(9550)) {
         TF2Items_CreateWeapon(9550, "tf_weapon_spellbook", 1070, 4, 1, 1);
     }
@@ -61,97 +41,17 @@ public OnPluginStart() {
         TF2Items_CreateWeapon(9551, "tf_weapon_spellbook", 1070, 5, 1, 1);
     }
     
-    // TODO Add cvar to control fake ticking (to disable on Helltower)
-    // TODO Add cvar to control automatic spellbook granting
-    // TODO Remove spell commands
-    // TODO Add custom spell support!  (Extended override handling on spellbooks)
-    
     HookEvent("post_inventory_application", Hook_PostPlayerInventoryUpdate);
 }
 
-public OnMapStart() {
-    CacheTickSounds();
-    
-    // Find existing spell pickups and hook them.
-    new i = -1;
-    while ((i = FindEntityByClassname(i, "tf_spell_pickup")) != -1) {
-        SDKHook(i, SDKHook_Touch, SDKHook_OnTouch);
-    }
-    
-    new gameRules = FindEntityByClassname(-1, "tf_gamerules");
-    
-    if (IsValidEntity(gameRules)) {
-        SetEntProp(gameRules, Prop_Send, "m_bIsUsingSpells", 1);
-        SetEntProp(gameRules, Prop_Send, "m_nMapHolidayType", 2);
-    }
-    
-    new entHoliday = -1;
-    while ( (entHoliday = FindEntityByClassname(entHoliday, "tf_logic_holiday")) != -1) {
-        OnEntityCreated(entHoliday, "tf_logic_holiday");
-    }
-}
-
-public OnEntityCreated(entity, const String:classname[]) {
-    if (StrEqual(classname, "tf_logic_holiday")) {
-        SetVariantBool(true);
-        AcceptEntityInput(entity, "HalloweenSetUsingSpells");
-    } else if (StrEqual(classname, "tf_spell_pickup")) {
-        SDKHook(entity, SDKHook_Touch, SDKHook_OnTouch);
-    }
-}
-
-CacheTickSounds() {
-    decl String:soundPath[96];
-    for (new i = 0; i < sizeof(tickSound); i++) {
-        Format(soundPath, sizeof(soundPath), "sound/%s", tickSound[i]);
-        PrecacheSound(soundPath, true);
-    }
-}
-
 public Hook_PostPlayerInventoryUpdate(Handle:event, const String:name[], bool:dontBroadcast) {
+    // If not Halloween, then spellbooks are assumed to be disabled.
+    if (!TF2_IsHolidayActive(TFHoliday_HalloweenOrFullMoon)) {
+        return;
+    }
+
     new client = GetClientOfUserId(GetEventInt(event, "userid"));
     FindSpellbook(client);
-}
-
-public SDKHook_OnTouch(pickup, client) {
-    // TODO Store spellbook entity index.
-    // TODO Fix bug that if the entity is invisible but being touched, the timers will still run.
-    new bool:isValidClient = client > 0 && client < MAXPLAYERS+1 && IsPlayerAlive(client);
-    if ( isValidClient && GetTickedTime() - rg_fLastSpellPickup[client] > 2.0
-            && GetEntProp(FindSpellbook(client, false), Prop_Send, "m_iSpellCharges") < 1 ) {
-        rg_fLastSpellPickup[client] = GetTickedTime();
-        CreateTimer(0.075, Timer_Spellbook, client, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
-        CreateTimer(2.1, Timer_GetSpell, client, TIMER_FLAG_NO_MAPCHANGE);
-    }
-}
-
-// Fake the spellbook ticking.
-public Action:Timer_Spellbook(Handle:timer, any:client) {
-    EmitSoundToClient(client, tickSound[rg_nSpellTick[client]++ % 2]);
-    
-    new Float:tickedDuration = GetTickedTime() - rg_fLastSpellPickup[client];
-    if (tickedDuration > 2.0 ) {
-        rg_nSpellTick[client] = 0;
-        KillTimer(timer);
-    } else if (rg_nSpellTick[client] > 12) {
-        KillTimer(timer);
-        CreateTimer(0.225, Timer_Spellbook, client, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
-    } else if (rg_nSpellTick[client] > 10) {
-        KillTimer(timer);
-        CreateTimer(0.151, Timer_Spellbook, client, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
-    }
-}
-
-public Action:Timer_GetSpell(Handle:timer, any:client) {
-    new spellbook = FindSpellbook(client, false);
-    new charges = GetEntProp(spellbook, Prop_Send, "m_iSpellCharges");
-    if (charges > 0) {
-        new spell = GetEntProp(spellbook, Prop_Send, "m_iSelectedSpellIndex");
-        
-        EmitSoundToClient(client, tickSound[2], _, _, _, _, 0.5);
-        
-        CPrintToChat(client, "You got %d uses of the spell %s%s{DEFAULT}!", charges, sSpellColor[spell > 6], spellnames[spell]);
-    }
 }
 
 public Action:Command_CreateSpell(client, args) {
@@ -197,16 +97,31 @@ stock FindSpellbook(client, bool:createIfNonexistent = true) {  //GetPlayerWeapo
     }
     
     // Create a custom spellbook.  (If Spy, Engineer use the 5-slot version)
-    // TODO Figure out cosmetics bug.
+    // TODO Figure out cosmetics bug?
     if (createIfNonexistent) {
-        new TFClassType:playerClass = TF2_GetPlayerClass(client);
-        new spellbook = TF2Items_GiveWeapon(client, 9550 + _:(playerClass == TFClass_Spy || playerClass == TFClass_Engineer));
-        SetEntProp(spellbook, Prop_Send, "m_bFiredAttack", false);
-        CPrintToChat(client, "It's dangerous out there.  You've been given a {UNIQUE}Spellbook Magazine{DEFAULT}.");
-        return spellbook;
+        return GrantSpellbook(client);
     } else {
         return -1;
     }
+}
+
+GrantSpellbook(client) {
+    new activeWeapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
+    new TFClassType:playerClass = TF2_GetPlayerClass(client);
+    new spellbook = TF2Items_GiveWeapon(client, 9550 + _:(playerClass == TFClass_Spy || playerClass == TFClass_Engineer));
+    SetEntProp(spellbook, Prop_Send, "m_bFiredAttack", false);
+    
+    // Notify client once.
+    new clientAccountId = GetSteamAccountID(client);
+    if (g_rgiClientNotified[client] != clientAccountId) {
+        CPrintToChat(client, "It's dangerous out there.  You've been given a {UNIQUE}Spellbook Magazine{DEFAULT}.");
+        CPrintToChat(client, "Pick up a {LIGHTGREEN}spell{DEFAULT} and use your action slot key to cast spells.");
+        g_rgiClientNotified[client] = clientAccountId;
+    }
+    
+    SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", activeWeapon);
+    
+    return spellbook;
 }
 
 SetTeleportEndPoint(client, Float:vector[3]) {
@@ -242,12 +157,3 @@ SetTeleportEndPoint(client, Float:vector[3]) {
 public bool:TraceEntityFilterPlayer(entity, contentsMask) {
 	return entity > GetMaxClients() || !entity;
 }
-
-/**
- * Client demos run at 66.6 ticks per second.  According to a test demo on Helltower...
- * 833 + 3 pick up spell, no sound, then the next ones tick at...
- * 836 + 5, 841 + 5, 846 + 5, 851 + 5, 856 + 6, 862 + 5, 867 + 6, 873 + 5, 878 + 6, 884 + 5,
- * 889 + 9, 898 + 11
- * 909 + 15, 924 + 15, 939 + 14, 953 + 16, 969 is spoop as we find out which spell we get (133 ticks = 2 seconds.
- * So we create a timer for 0.75 sec, play first 10, skip every other for next 2, skip two for next 4
-*/
