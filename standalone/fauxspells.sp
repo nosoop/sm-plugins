@@ -14,12 +14,12 @@
 #include <tf2items_giveweapon>
 #include <morecolors>
 
-#define PLUGIN_VERSION          "1.0.0"     // Plugin version.
+#define PLUGIN_VERSION          "2.0.0"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Free Magazines",
     author = "nosoop",
-    description = "Plugin to handle Halloween spells because Valve won't!",
+    description = "Automatically grants spellbooks to players that do not have them.",
     version = PLUGIN_VERSION,
     url = "http://github.com/nosoop"
 }
@@ -27,7 +27,7 @@ public Plugin:myinfo = {
 new g_rgiClientNotified[MAXPLAYERS+1];
 
 public OnPluginStart() {
-    CreateConVar("tf_spellbookcmds_version", PLUGIN_VERSION, "[TF2] Faux Spells version", FCVAR_NOTIFY|FCVAR_PLUGIN);
+    CreateConVar("sm_freemagazines_version", PLUGIN_VERSION, "[TF2] Free Magazines version", FCVAR_NOTIFY|FCVAR_PLUGIN);
     LoadTranslations("common.phrases");
     
     RegAdminCmd("sm_spawnspellbook", Command_CreateSpell, ADMFLAG_GENERIC, "Spawns a spellbook.");
