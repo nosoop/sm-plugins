@@ -8,7 +8,7 @@
 #include <sdktools>
 #include <clientprefs>
 
-#define PLUGIN_VERSION          "1.4.3"     // Plugin version.
+#define PLUGIN_VERSION          "1.4.4"     // Plugin version.
 
 #define ARRAY_ARTIST            0
 #define ARRAY_TITLE             1
@@ -209,8 +209,8 @@ GetActiveSongCount() {
 }
 
 GetNextSong() {
-    new iTrack = GetArrayCell(g_hTrackNum, g_iTrack++);
-    g_iTrack %= GetActiveSongCount();
+    new iTrack = GetArrayCell(g_hTrackNum, g_iTrack);
+    g_iTrack = (g_iTrack + 1) % GetActiveSongCount();
     return iTrack;
 }
 
