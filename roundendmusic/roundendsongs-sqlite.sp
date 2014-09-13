@@ -8,7 +8,7 @@
 #undef REQUIRE_PLUGIN                       // Support late loads.
 #include <roundendsongs>
 
-#define PLUGIN_VERSION          "0.2.1"     // Plugin version.
+#define PLUGIN_VERSION          "0.3.0"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "Round End Music (SQLite)",
@@ -50,6 +50,9 @@ PrepareStringConVar(Handle:hConVar, String:sValue[], nValueSize) {
 }
 
 public Action:REM_OnSongsRequested(nSongs) {
+    new nSongsAdded;
+    new songIds[nSongs];
+
     // Connect to database.
     new Handle:hDatabase = GetSongDatabaseHandle();
     
@@ -60,23 +63,35 @@ public Action:REM_OnSongsRequested(nSongs) {
     
     decl String:sSongQuery[256];
     Format(sSongQuery, sizeof(sSongQuery),
-            "SELECT artist,track,filepath FROM %s WHERE enabled = 1 ORDER BY %s LIMIT %d",
+            "SELECT artist,track,filepath,file_id FROM %s WHERE enabled = 1 ORDER BY %s LIMIT %d",
             g_sTableName, sWeightFunction, nSongs);
     
     new Handle:hSongQuery = SQL_Query(hDatabase, sSongQuery);
     
-    decl String:rgsSongData[3][PLATFORM_MAX_PATH];
+    decl String:rgsSongData[3][PLATFORM_MAX_PATH], songId;
     while (SQL_FetchRow(hSongQuery)) {
         for (new i = 0; i < 3; i++) {
             SQL_FetchString(hSongQuery, i, rgsSongData[i], sizeof(rgsSongData[]));
         }
         
+        songId = SQL_FetchInt(hSongQuery, 3);
+        
         // Append directory.
         Format(rgsSongData[ARRAY_FILEPATH], sizeof(rgsSongData[]), "%s%s", g_sSongDir, rgsSongData[ARRAY_FILEPATH]);
-        REM_AddToQueue(rgsSongData[ARRAY_ARTIST], rgsSongData[ARRAY_TITLE], rgsSongData[ARRAY_FILEPATH]);
+        if (REM_AddToQueue(rgsSongData[ARRAY_ARTIST], rgsSongData[ARRAY_TITLE], rgsSongData[ARRAY_FILEPATH])) {
+            songIds[nSongsAdded++] = songId;
+        }
+    }
+    CloseHandle(hSongQuery);
+    
+    for (new i = 0; i < nSongsAdded; i++) {
+        decl String:sUpdateQuery[255];
+        Format(sUpdateQuery, sizeof(sUpdateQuery),
+                "UPDATE %s SET playcount=playcount+1 WHERE file_id = %d",
+                g_sTableName, songIds[i]);
+        SQL_FastQuery(hDatabase, sUpdateQuery);
     }
     
-    CloseHandle(hSongQuery);
     CloseHandle(hDatabase);
 }
 
