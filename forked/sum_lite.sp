@@ -14,9 +14,6 @@
 #define ADM_PERM_FULL 16383 // no root
 #define ADM_PERM_ROOT 32767
 
-#define MANI_SUPPORT 1
-#define CHATMESSAGES 1
-#define CONSOLEMESSAGES 1
 
 #define STEAMID_LENGTH 30
 enum DatabaseIdent {
@@ -26,16 +23,13 @@ enum DatabaseIdent {
 };
 
 public Plugin:myinfo = {
-	name = "SUM - global admins, bans and antifake",
-	author = "sfPlayer",
-	description = "Handles bans, admins and nicks for multiple servers",
-	version = "1.5.0",
-	url = "http://www.player.to/"
+	name = "SUM (Lite)",
+	author = "nosoop, original by sfPlayer",
+	description = "A fork of SUM.  Handles persistent bans exclusively with SQLite.",
+	version = "1.0.0",
+	url = "http://github.com/nosoop"
 }
 
-#if MANI_SUPPORT
-new bool:maniPresent = false;
-#endif
 new Handle:hDatabase = INVALID_HANDLE;
 new DatabaseIdent:databaseIdent = DBIdent_Unknown;
  
@@ -63,9 +57,7 @@ public gotDatabase(Handle:owner, Handle:hndl, const String:error[], any:data) {
 		decl String:dbIdent[20];
 		new Handle:DBDrv = SQL_ReadDriver(hDatabase, dbIdent, sizeof(dbIdent));
 		CloseHandle(DBDrv);
-		if (StrEqual(dbIdent, "mysql")) {
-			databaseIdent = DBIdent_MySQL;
-		} else if (StrEqual(dbIdent, "sqlite")) {
+		if (StrEqual(dbIdent, "sqlite")) {
 			databaseIdent = DBIdent_SQLite;
 		} else {
 			databaseIdent = DBIdent_Unknown;
@@ -76,46 +68,14 @@ public gotDatabase(Handle:owner, Handle:hndl, const String:error[], any:data) {
 public OnClientDisconnect(client) {
 	decl String:auth[STEAMID_LENGTH];
 	GetClientAuthString(client, auth, sizeof(auth));
-#if MANI_SUPPORT
-	if (maniPresent) {
-		ServerCommand("ma_client RemoveClient sum%s", auth);
-	}
-#endif
-#if CONSOLEMESSAGES
-	decl String:name[MAX_NAME_LENGTH+1];
-	GetClientName(client, name, sizeof(name)); 
-
-	decl String:buffer[100];
-	Format(buffer, sizeof(buffer), "%s left, SteamID %s", name, auth);
-	PrintToConsoleAll(buffer);
-#endif
 }
 
 public OnClientAuthorized(client, const String:auth[]) {
 	if (hDatabase != INVALID_HANDLE) {
 		checkSteamID(GetClientUserId(client), auth);
 	}
-#if CONSOLEMESSAGES
-	decl String:name[MAX_NAME_LENGTH+1];
-	GetClientName(client, name, sizeof(name)); 
-
-	decl String:buffer[100];
-	Format(buffer, sizeof(buffer), "%s joined, SteamID %s", name, auth);
-	PrintToConsoleAll(buffer);
-#endif
 }
 
-#if CHATMESSAGES
-public OnClientPostAdminCheck(client) {
-	if (hDatabase != INVALID_HANDLE) {
-		decl String:auth[STEAMID_LENGTH];
-		GetClientAuthString(client, auth, sizeof(auth));
-		decl String:newquery[255];
-		Format(newquery, sizeof(newquery), "SELECT name, bancount FROM clientname n, client c WHERE n.steamid = '%s' AND c.steamid = n.steamid ORDER BY count DESC LIMIT 3;", auth);
-		SQL_TQuery(hDatabase, T_queryNames, newquery, GetClientUserId(client));
-	}
-}
-#endif
 
 public Action:sum_setup(client, args) {
 	if (args != 1 && args != 5 && args != 6) {
@@ -131,70 +91,7 @@ public Action:sum_setup(client, args) {
 	BuildPath(Path_SM, kvFileName, sizeof(kvFileName), "configs/databases.cfg");
 	FileToKeyValues(kvHandle, kvFileName);
 
-	if (StrEqual(dbIdent, "mysql")) {
-		if (args < 5) {
-			ReplyToCommand(client, "SUM: Usage: sum_setup mysql <host> <database> <user> <password> [<port>] or sum_setup sqlite (local only)");
-			CloseHandle(kvHandle);
-			return Plugin_Handled;
-		}
-
-		decl String:dbHost[32];
-		GetCmdArg(2, dbHost, sizeof(dbHost));
-		decl String:dbDatabase[32];
-		GetCmdArg(3, dbDatabase, sizeof(dbDatabase));
-		decl String:dbUser[32];
-		GetCmdArg(4, dbUser, sizeof(dbUser));
-		decl String:dbPassword[32];
-		GetCmdArg(5, dbPassword, sizeof(dbPassword));
-
-		new dbPort = 0;
-		if (args == 6) {
-			decl String:dbsPort[6];
-			GetCmdArg(6, dbsPort, sizeof(dbsPort));
-			dbPort = StringToInt(dbsPort);
-		}
-
-		decl String:err[128];
-
-		new Handle:dbDrvHandle = SQL_GetDriver("mysql");
-		if (dbDrvHandle == INVALID_HANDLE) {
-			ReplyToCommand(client, "SUM: Error: The MySQL driver (SM extension) is not available");
-			CloseHandle(kvHandle);
-			return Plugin_Handled;
-		}
-
-		new Handle:dbConnection = SQL_ConnectEx(dbDrvHandle, dbHost, dbUser, dbPassword, dbDatabase, err, sizeof(err), false, dbPort, 10);
-		if (dbConnection == INVALID_HANDLE) {
-			ReplyToCommand(client, "SUM: Error: The MySQL configuration is invalid (%s)", err);
-			CloseHandle(dbDrvHandle);
-			CloseHandle(kvHandle);
-			return Plugin_Handled;
-		} else {
-			decl String:queryStr[70];
-			Format(queryStr, sizeof(queryStr), "CREATE DATABASE IF NOT EXISTS %s;", dbDatabase);
-			SQL_FastQuery(dbConnection, queryStr);
-
-			if (!SQL_FastQuery(dbConnection, "CREATE TABLE `banlog` (`target` varchar(30) NOT NULL,`creator` varchar(30) NOT NULL,`time` int(10) unsigned NOT NULL,`duration` int(10) unsigned NOT NULL,`reason` varchar(64) NOT NULL,KEY `target` (`target`)) ENGINE=MyISAM DEFAULT CHARSET=utf8;") || !SQL_FastQuery(dbConnection, "CREATE TABLE `client` (`steamid` varchar(30) NOT NULL,`admin` int(10) unsigned NOT NULL default '0',`banneduntil` int(10) unsigned NOT NULL default '0',`bancount` int(10) unsigned NOT NULL default '0',`connectcount` int(10) unsigned NOT NULL default '0',`lastconnect` int(10) unsigned NOT NULL default '0',PRIMARY KEY  (`steamid`),KEY `admin` (`admin`)) ENGINE=MyISAM DEFAULT CHARSET=utf8;") || !SQL_FastQuery(dbConnection, "CREATE TABLE `clientname` (`steamid` varchar(30) NOT NULL,`name` varchar(64) NOT NULL,`count` int(10) unsigned NOT NULL default '0',PRIMARY KEY  (`steamid`,`name`)) ENGINE=MyISAM DEFAULT CHARSET=utf8;")) {
-				if (SQL_GetError(dbConnection, err, sizeof(err))) {
-					ReplyToCommand(client, "SUM: Error: Can't create database (%s)", err);
-				}
-				CloseHandle(dbConnection);
-				CloseHandle(dbDrvHandle);
-				CloseHandle(kvHandle);
-				return Plugin_Handled;
-			}
-			CloseHandle(dbConnection);
-			CloseHandle(dbDrvHandle);
-		}
-
-		KvJumpToKey(kvHandle, "sumdb", true);
-		KvSetString(kvHandle, "driver", "mysql");
-		KvSetString(kvHandle, "host", dbHost);
-		KvSetString(kvHandle, "database", dbDatabase);
-		KvSetString(kvHandle, "user", dbUser);
-		KvSetString(kvHandle, "pass", dbPassword);
-		if (dbPort != 0) KvSetNum(kvHandle, "port", dbPort);
-	} else if (StrEqual(dbIdent, "sqlite")) {
+	if (StrEqual(dbIdent, "sqlite")) {
 		decl String:err[128];
 
 		new Handle:dbDrvHandle = SQL_GetDriver("sqlite");
@@ -426,10 +323,7 @@ public Action:sum_setadmin(client, args) {
 
 	decl String:newquery[150];
 
-	if (databaseIdent == DBIdent_MySQL) {
-		Format(newquery, sizeof(newquery), "INSERT INTO client SET admin = '%d', steamid = '%s' ON DUPLICATE KEY UPDATE admin = '%d';", admin, buffer, admin);
-		SQL_TQuery(hDatabase, T_ignore, newquery);
-	} else if (databaseIdent == DBIdent_SQLite) {
+	if (databaseIdent == DBIdent_SQLite) {
 		Format(newquery, sizeof(newquery), "INSERT OR IGNORE INTO client (admin, steamid) VALUES ('%d', '%s');", admin, buffer, DBPrio_High);
 		SQL_TQuery(hDatabase, T_ignore, newquery);
 		Format(newquery, sizeof(newquery), "UPDATE client SET admin = '%d' WHERE steamid = '%s';", admin, buffer);
@@ -487,11 +381,7 @@ executeGlobalBan(const client, const String:authtarget[], const time, const Stri
 			expiretime = GetTime() + time*60;
 		}
 
-		if (databaseIdent == DBIdent_MySQL) {
-			decl String:newquery[200];
-			Format(newquery, sizeof(newquery), "INSERT INTO client SET banneduntil = '%d', bancount = '1', steamid = '%s' ON DUPLICATE KEY UPDATE banneduntil = '%d', bancount = bancount+1;", expiretime, authtarget, expiretime);
-			SQL_TQuery(hDatabase, T_ignore, newquery);
-		} else if (databaseIdent == DBIdent_SQLite) {
+		if (databaseIdent == DBIdent_SQLite) {
 			decl String:newquery[200];
 			Format(newquery, sizeof(newquery), "INSERT OR IGNORE INTO client (banneduntil, bancount, steamid) VALUES ('%d', '0', '%s');", expiretime, authtarget, DBPrio_High);
 			SQL_TQuery(hDatabase, T_ignore, newquery);
@@ -548,34 +438,6 @@ public T_querySteamID(Handle:db, Handle:query, const String:error[], any:data) {
 			
 			if (admin) {
 				SetUserFlagBits(client, GetUserFlagBits(client) | admin);
-#if MANI_SUPPORT
-				checkMani();
-
-				if (maniPresent) {
-					new String:maniflags[255] = "";
-
-					if (admin & ADMFLAG_ROOT) {
-						StrCat(maniflags, sizeof(maniflags), "+# "); // includes +client +P
-					} else {
-						if (admin & ADMFLAG_GENERIC) StrCat(maniflags, sizeof(maniflags), "+admin +p +spray ");
-						if (admin & ADMFLAG_KICK) StrCat(maniflags, sizeof(maniflags), "+k ");
-						if (admin & ADMFLAG_BAN) StrCat(maniflags, sizeof(maniflags), "+b +pban ");
-						if (admin & ADMFLAG_SLAY) StrCat(maniflags, sizeof(maniflags), "+I +g +l +m ");
-						if (admin & ADMFLAG_CHANGEMAP) StrCat(maniflags, sizeof(maniflags), "+c ");
-						if (admin & ADMFLAG_CONVARS) StrCat(maniflags, sizeof(maniflags), "+E ");
-						if (admin & ADMFLAG_CONFIG) StrCat(maniflags, sizeof(maniflags), "+J+ q+ q2+ q3 +w +z ");
-						if (admin & ADMFLAG_CHAT) StrCat(maniflags, sizeof(maniflags), "+L +a +o +s ");
-						if (admin & ADMFLAG_VOTE) StrCat(maniflags, sizeof(maniflags), "+A +B +C +D +Q +R +V +v ");
-						if (admin & ADMFLAG_PASSWORD) StrCat(maniflags, sizeof(maniflags), "+H ");
-						if (admin & ADMFLAG_RCON) StrCat(maniflags, sizeof(maniflags), "+r +x +y ");
-						if (admin & ADMFLAG_CHEATS) StrCat(maniflags, sizeof(maniflags), "+F +G +K +M +N +O +S +T +U +W +X +Y +Z +d +e +grav +i +f +t ");
-					}
-
-					ServerCommand("ma_client AddClient sum%s", auth);
-					ServerCommand("ma_client AddSteam sum%s %s", auth, auth);
-					ServerCommand("ma_client SetAFlag sum%s \"%s\"", auth, maniflags);
-				}
-#endif
 				PrintToConsole(client, "SUM: You have been given admin access.");
 			}
 		}
@@ -612,45 +474,6 @@ insertClientName(const client, const String:auth[]) {
 	}
 }
 
-#if CHATMESSAGES
-public T_queryNames(Handle:db, Handle:query, const String:error[], any:data) {
-	decl client;
-
-	if ((client = GetClientOfUserId(data)) == 0) return;
-
-	decl String:auth[STEAMID_LENGTH];
-	GetClientAuthString(client, auth, sizeof(auth));
-	decl String:name[MAX_NAME_LENGTH+1];
-	GetClientName(client, name, sizeof(name)); 
-
-	if (query == INVALID_HANDLE) {
-		LogError("SUM: Query failed! %s", error);
-	} else if (SQL_GetRowCount(query)) {
-		decl banCount;
-		new String:namelist[(MAX_NAME_LENGTH+2)*3+2];
-
-		while (SQL_FetchRow(query)) {
-			decl String:cname[MAX_NAME_LENGTH+1];
-			SQL_FetchString(query, 0, cname, sizeof(cname));
-			banCount = SQL_FetchInt(query, 1);
-
-			StrCat(namelist, sizeof(namelist), cname);
-			StrCat(namelist, sizeof(namelist), ", ");
-		}
-		
-		namelist[strlen(namelist)-2] = 0;
-
-		if (banCount) {
-			PrintToChatAll("SUM: %s (%s) is known as: %s (banned %d time(s) before).", name, auth, namelist, banCount);
-		} else {
-			PrintToChatAll("SUM: %s (%s) is known as: %s.", name, auth, namelist);
-		}
-	} else {
-		PrintToChatAll("SUM: %s (%s) is not known yet.", name, auth);
-	}
-}
-#endif
-
 public T_queryAdmins(Handle:db, Handle:query, const String:error[], any:data) {
 	decl client;
 
@@ -674,18 +497,6 @@ public T_ignore(Handle:owner, Handle:hndl, const String:error[], any:data) {
 
 	// nothing..
 }
-
-#if MANI_SUPPORT
-checkMani() {
-	new Handle:cvMani = INVALID_HANDLE;
-	if ((cvMani = FindConVar("mani_admin_plugin_version")) == INVALID_HANDLE) {
-		maniPresent = false;
-	} else {
-		CloseHandle(cvMani);
-		maniPresent = true;
-	}
-}
-#endif
 
 displayAdminList(Handle:query, client) {
 	if (query == INVALID_HANDLE) {
@@ -808,16 +619,3 @@ stock isNumeric(const String:str[]) {
 
 	return true;
 }
-
-#if CONSOLEMESSAGES
-stock PrintToConsoleAll(const String:message[]) {
-	new maxclients = GetMaxClients();
-
-	for (new client=1; client <= maxclients; client++) {
-		if (IsClientInGame(client)) {
-			PrintToConsole(client, message);
-		}
-	}
-}
-#endif
-
