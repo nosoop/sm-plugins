@@ -5,8 +5,9 @@
 #pragma semicolon 1
 
 #include <sourcemod>
+#include <scp>
 
-#define PLUGIN_VERSION          "0.1.0"     // Plugin version.
+#define PLUGIN_VERSION          "0.2.0"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Text Logger",
@@ -17,12 +18,6 @@ public Plugin:myinfo = {
 }
 
 new Handle:rg_hLogFiles[4] = { INVALID_HANDLE, ... };
-
-public OnPluginStart() {
-    // Register for say events.
-	RegConsoleCmd("say", Command_Say);
-	RegConsoleCmd("say_team", Command_SayTeam);
-}
 
 public OnPluginEnd() {
     // Clean up all handles.
@@ -41,7 +36,7 @@ CreateTextLogFile(handleIndex, const String:sLogName[]) {
         String:sLogFullName[PLATFORM_MAX_PATH],
         String:sDateTime[64];
     
-    FormatTime(sDateTime, sizeof(sDateTime), "%d%m%Y-%H%M%S");
+    FormatTime(sDateTime, sizeof(sDateTime), "%Y%m%d-%H%M%S");
     Format(sLogFileName, sizeof(sLogFileName), "/logs/chat-%s-%s.log", sDateTime, sLogName);
     BuildPath(Path_SM, sLogFullName, PLATFORM_MAX_PATH, sLogFileName);
     
@@ -80,36 +75,13 @@ public OnMapStart() {
     TextLogToFile(0, sMessage);
 }
 
-/**
- * Say events.
- */
-public Action:Command_Say(client, args) {
-    if (IsChatTrigger()) {
-        return;
-    }
-
+public Action:OnChatMessage(&author, Handle:recipients, String:name[], String:message[]) { 
     new String:sTextMessage[512];
-    GetCmdArgString(sTextMessage, sizeof(sTextMessage));
-    StripQuotes(sTextMessage);
     
-    LogSayMessage(client, sTextMessage, false);
-}
-
-public Action:Command_SayTeam(client, args) {
-    if (IsChatTrigger()) {
-        return;
-    }
-
-    new String:sTextMessage[512];
-    GetCmdArgString(sTextMessage, sizeof(sTextMessage));
-    StripQuotes(sTextMessage);
+    new flags = GetMessageFlags();
+    new bTeamMessage = flags & CHATFLAGS_TEAM == CHATFLAGS_TEAM;
     
-    LogSayMessage(client, sTextMessage, true);
-}
-
-LogSayMessage(client, String:sMessage[], bool:bTeamMessage) {    
-    new String:sTextMessage[512];
-    Format(sTextMessage, sizeof(sTextMessage), "%s%N : %s", bTeamMessage ? "(TEAM) " : "", client, sMessage);
+    Format(sTextMessage, sizeof(sTextMessage), "%s%N : %s", bTeamMessage ? "(TEAM) " : "", author, message);
 
     TextLogToFile(0, sTextMessage);
 }
