@@ -7,7 +7,7 @@
 #include <sourcemod>
 #include <scp>
 
-#define PLUGIN_VERSION          "0.2.0"     // Plugin version.
+#define PLUGIN_VERSION          "0.3.0"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Text Logger",
@@ -18,6 +18,7 @@ public Plugin:myinfo = {
 }
 
 new Handle:rg_hLogFiles[4] = { INVALID_HANDLE, ... };
+new bool:g_rgbReceivedMessage[MAXPLAYERS+1];
 
 public OnPluginEnd() {
     // Clean up all handles.
@@ -84,6 +85,12 @@ public Action:OnChatMessage(&author, Handle:recipients, String:name[], String:me
     Format(sTextMessage, sizeof(sTextMessage), "%s%N : %s", bTeamMessage ? "(TEAM) " : "", author, message);
 
     TextLogToFile(0, sTextMessage);
+    CreateTimer(0.01, Timer_UnsetChatDelay, author);
+    return Plugin_Continue;
+}
+
+public Action:Timer_UnsetChatDelay(Handle:timer, any:client) {
+    g_rgbReceivedMessage[client] = false;
 }
 
 /**
