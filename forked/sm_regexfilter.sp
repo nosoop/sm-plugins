@@ -11,9 +11,11 @@ public Plugin:myinfo =
 	name = "REGEX word filter (SCP)",
 	author = "Twilight Suzuka, nosoop",
 	description = "Filter words via Regular Expressions and Simple Chat Processor",
-	version = "1.0.0",
+	version = "1.0.1",
 	url = "http://www.sourcemod.net/"
 };
+
+new bool:g_rgbReceivedMessage[MAXPLAYERS+1];
 
 new Handle:CvarEnable = INVALID_HANDLE;
 
@@ -61,8 +63,12 @@ public APLRes:AskPluginLoad2(Handle:myself, bool:late, String:error[], err_max) 
 	return APLRes_Success;
 }
 
-public OnMapStart() ClientLimits[0] = CreateTrie();
-public OnMapEnd() CloseHandle(ClientLimits[0]);
+public OnMapStart() {
+    ClientLimits[0] = CreateTrie();
+}
+public OnMapEnd() {
+    CloseHandle(ClientLimits[0]);
+}
 
 public bool:OnClientConnect(client, String:rejectmsg[], maxlen) {
 	ClientLimits[client] = CreateTrie();
@@ -70,11 +76,21 @@ public bool:OnClientConnect(client, String:rejectmsg[], maxlen) {
 }
 
 public OnClientDisconnect(client) {
-	CloseHandle(ClientLimits[client]);
+    if (ClientLimits[client] != INVALID_HANDLE) {
+        CloseHandle(ClientLimits[client]);
+    }
 }
 
 public Action:OnChatMessage(&author, Handle:recipients, String:name[], String:message[]) {
 	if(!GetConVarInt(CvarEnable)) return Plugin_Continue;
+    
+	if (g_rgbReceivedMessage[author]) {
+		return Plugin_Stop;
+	} else {
+		g_rgbReceivedMessage[author] = true;
+		CreateTimer(0.1, Timer_UnsetChatDelay, author);
+	}
+
 	
 	decl String:text[MAXLENGTH_MESSAGE-MAXLENGTH_NAME];
 	if (IsChatTrigger() || strcopy(text, sizeof(text), message) < 1) {
@@ -175,6 +191,10 @@ public Action:OnChatMessage(&author, Handle:recipients, String:name[], String:me
 	}
 	
 	return Plugin_Continue;
+}
+
+public Action:Timer_UnsetChatDelay(Handle:timer, any:client) {
+    g_rgbReceivedMessage[client] = false;
 }
 
 stock LoadExpressions(String:file[], bool:optional = false) {
