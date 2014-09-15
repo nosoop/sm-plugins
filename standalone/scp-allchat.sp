@@ -7,7 +7,7 @@
 #include <sourcemod>
 #include <scp>
 
-#define PLUGIN_VERSION          "1.0.0"     // Plugin version.
+#define PLUGIN_VERSION          "1.0.1"     // Plugin version.
 
 #define CHAT_STANDARD           0
 #define CHAT_ALL                1
@@ -47,16 +47,11 @@ public Action:OnChatMessage(&author, Handle:recipients, String:name[], String:me
         g_rgbReceivedMessage[author] = true;
     }
 
-    PrintToServer("Message from %s: %s (recipients %d)", name, message, GetArraySize(recipients));
     new mode = GetConVarInt(g_hCvarMode), teamMode = GetConVarInt(g_hCvarTeam);
     new flags = GetMessageFlags();
     
-    for (new i = 0; i < GetArraySize(recipients); i++) {
-        PrintToServer("%d", GetArrayCell(recipients, i));
-    }
-    
     if (mode == CHAT_STANDARD
-            || mode == CHAT_ALLTALK && !GetConVarBool(g_hCvarAllTalk)) {
+            || (mode == CHAT_ALLTALK && !GetConVarBool(g_hCvarAllTalk)) ) {
         return Plugin_Continue;
     }
     
@@ -81,8 +76,7 @@ public Action:OnChatMessage(&author, Handle:recipients, String:name[], String:me
             }
         }
     }
-    PrintToServer("Post-message from %s: %s (recipients %d)", name, message, GetArraySize(recipients));
-    
+
     CreateTimer(0.01, Timer_UnsetChatDelay, author);
     return Plugin_Changed;
 }
