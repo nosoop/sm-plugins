@@ -14,21 +14,26 @@
 #include <tf2items_giveweapon>
 #include <morecolors>
 
-#define PLUGIN_VERSION          "2.0.0"     // Plugin version.
+#define PLUGIN_VERSION          "2.0.1"     // Plugin version.
+
+#define FORCED_HOLIDAY_HWEEN    2           // tf_forced_holiday value for Halloween.
 
 public Plugin:myinfo = {
     name = "[TF2] Free Magazines",
     author = "nosoop",
-    description = "Automatically grants spellbooks to players that do not have them.",
+    description = "Automatically grants spellbook magazines to players that do not have them.",
     version = PLUGIN_VERSION,
     url = "http://github.com/nosoop"
 }
 
-new g_rgiClientNotified[MAXPLAYERS+1];
+new g_rgiClientNotified[MAXPLAYERS+1], 
+    Handle:g_hCHolidayMode = INVALID_HANDLE;
 
 public OnPluginStart() {
     CreateConVar("sm_freemagazines_version", PLUGIN_VERSION, "[TF2] Free Magazines version", FCVAR_NOTIFY|FCVAR_PLUGIN);
     LoadTranslations("common.phrases");
+    
+    g_hCHolidayMode = FindConVar("tf_forced_holiday");
     
     RegAdminCmd("sm_spawnspellbook", Command_CreateSpell, ADMFLAG_GENERIC, "Spawns a spellbook.");
     
@@ -46,7 +51,8 @@ public OnPluginStart() {
 
 public Hook_PostPlayerInventoryUpdate(Handle:event, const String:name[], bool:dontBroadcast) {
     // If not Halloween, then spellbooks are assumed to be disabled.
-    if (!TF2_IsHolidayActive(TFHoliday_HalloweenOrFullMoon)) {
+    if (!TF2_IsHolidayActive(TFHoliday_HalloweenOrFullMoon)
+            || GetConVarInt(g_hCHolidayMode) != FORCED_HOLIDAY_HWEEN) {
         return;
     }
 
