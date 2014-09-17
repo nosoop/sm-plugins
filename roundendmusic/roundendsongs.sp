@@ -8,7 +8,7 @@
 #include <sdktools>
 #include <clientprefs>
 
-#define PLUGIN_VERSION          "1.4.4"     // Plugin version.
+#define PLUGIN_VERSION          "1.5.0"     // Plugin version.
 
 #define ARRAY_ARTIST            0
 #define ARRAY_TITLE             1
@@ -75,6 +75,7 @@ public OnPluginStart() {
         }
         OnClientCookiesCached(i);
     }
+    SetCookieMenuItem(CookieMenu_RoundEndSongVolume, INVALID_HANDLE, "Round End Music Volume");
     
     // Init global forwards.
     g_hFRequestSongs = CreateGlobalForward("REM_OnSongsRequested", ET_Hook, Param_Cell);
@@ -307,6 +308,12 @@ public MenuHandler_SongList(Handle:hMenu, MenuAction:hAction, client, selection)
     }
 }
 
+public CookieMenu_RoundEndSongVolume(iClient, CookieMenuAction:action, any:info, String:sBuffer[], iBufferSize) {
+    if (action != CookieMenuAction_DisplayOption) {
+        DisplayVolumeMenu(iClient);
+    }
+}
+
 public Action:Command_SetSongVolume(client, args) {
     if (args > 0) {
         decl String:sVolumeBuffer[8];
@@ -316,32 +323,42 @@ public Action:Command_SetSongVolume(client, args) {
         SetClientVolumeLevel(client,
                 fVolumeLevel > 1.0 ? 1.0 : ( fVolumeLevel < 0.0 ? 0.0 : fVolumeLevel ));
     } else {
-        new Handle:hPanel = CreatePanel();
-        
-        decl String:sPanelTitle[48];
-        Format(sPanelTitle, sizeof(sPanelTitle), "Song volume (currently %01.2f):", g_rgfClientVolume[client]);
-        SetPanelTitle(hPanel, sPanelTitle);
-        
-        decl String:sVolumeDisplay[24];
-        for (new i = 10; i > 0; i -= 2) {
-            Format(sVolumeDisplay, sizeof(sVolumeDisplay), "%d%% Volume", i * 10);
-            DrawPanelItem(hPanel, sVolumeDisplay);
-        }
-        DrawPanelItem(hPanel, "Disable Round End Music");   // Option 6
-        DrawPanelItem(hPanel, "Cancel");                    // Option 7
-
-        SendPanelToClient(hPanel, client, MenuHandler_SongVolume, 20);
-        CloseHandle(hPanel);
+        DisplayVolumeMenu(client);
     }
     return Plugin_Handled;
 }
 
-public MenuHandler_SongVolume(Handle:menu, MenuAction:action, client, selection) {
+DisplayVolumeMenu(client) {
+    new Handle:hMenu = CreateMenu(MenuHandler_SongVolume);
+        
+    decl String:sPanelTitle[48];
+    Format(sPanelTitle, sizeof(sPanelTitle), "Song volume (currently %01.2f):", g_rgfClientVolume[client]);
+    SetMenuTitle(hMenu, sPanelTitle);
+    
+    decl String:sVolumeDisplay[24], String:sVolumeAmount[6];
+    for (new i = 10; i > 0; i -= 2) {
+        Format(sVolumeDisplay, sizeof(sVolumeDisplay), "%d%% Volume", i * 10);
+        Format(sVolumeAmount, sizeof(sVolumeAmount), "%0.2f", i / 10);
+        AddMenuItem(hMenu, sVolumeAmount, sVolumeDisplay);
+    }
+    AddMenuItem(hMenu, "0.00", "Disable Round End Music");   // Option 6
+    SetMenuExitBackButton(hMenu, true); 
+
+    DisplayMenu(hMenu, client, 20);
+}
+
+public MenuHandler_SongVolume(Handle:hMenu, MenuAction:action, iClient, selection) {
     if (action == MenuAction_Select) {
         if (selection != 7) {
-            new Float:fVolumeLevel = 0.2 * (6 - selection);    // Menu selection is 1-index-based, so we subtract one.
-            SetClientVolumeLevel(client, fVolumeLevel);
+            new Float:fVolumeLevel = 0.2 * (5 - selection);
+            SetClientVolumeLevel(iClient, fVolumeLevel);
         }
+    } else if (action == MenuAction_Cancel) {
+        if (selection == MenuCancel_ExitBack) {
+            ShowCookieMenu(iClient);
+        }
+    } else if (action == MenuAction_End) {
+        CloseHandle(hMenu); 
     }
 }
 
