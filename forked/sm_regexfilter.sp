@@ -11,7 +11,7 @@ public Plugin:myinfo =
 	name = "REGEX word filter (SCP)",
 	author = "Twilight Suzuka, nosoop",
 	description = "Filter words via Regular Expressions and Simple Chat Processor",
-	version = "1.0.1",
+	version = "1.0.2",
 	url = "http://www.sourcemod.net/"
 };
 
@@ -154,7 +154,7 @@ public Action:OnChatMessage(&author, Handle:recipients, String:name[], String:me
 			}
 						
 			if (GetTrieValue(CurrInfo, "block", val)) {
-				return Plugin_Handled;
+				return Plugin_Stop;
 			}
 			
 			if (GetTrieValue(CurrInfo, "replace", val)) {
