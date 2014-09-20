@@ -8,7 +8,7 @@
 #include <sdktools>
 #include <clientprefs>
 
-#define PLUGIN_VERSION          "1.5.0"     // Plugin version.
+#define PLUGIN_VERSION          "1.6.0"     // Plugin version.
 
 #define ARRAY_ARTIST            0
 #define ARRAY_TITLE             1
