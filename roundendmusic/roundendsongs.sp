@@ -36,7 +36,8 @@ new Handle:g_hSongData[3] = { INVALID_HANDLE, INVALID_HANDLE, INVALID_HANDLE };
 new Handle:g_hTrackNum = INVALID_HANDLE;
 
 new Handle:g_hCPluginEnabled = INVALID_HANDLE,  bool:g_bPluginEnabled = true,   // Determines whether or not the plugin is enabled.
-    Handle:g_hCMaxSongCount = INVALID_HANDLE,   g_nMaxSongsLoaded;              // Determines the maximum number of songs to request.
+    Handle:g_hCMaxSongCount = INVALID_HANDLE,   g_nMaxSongsLoaded,              // Determines the maximum number of songs to request.
+    Handle:g_hCSongPlayDelay = INVALID_HANDLE,  Float:g_fSongPlayDelay;         // Determines how long to wait until the endround song begins to play.
 
 // Client preferences on volume.  TODO Properly handle nonexistent clientprefs.
 new Handle:g_hVolumeCookie = INVALID_HANDLE,    Float:g_rgfClientVolume[MAXPLAYERS+1];
@@ -48,6 +49,12 @@ public OnPluginStart() {
     // Initialize cvars and arrays.
     g_hCPluginEnabled = CreateConVar("sm_rem_enabled", "1", "Enables Round End Music.", FCVAR_PLUGIN|FCVAR_SPONLY, true, 0.0, true, 1.0);
     g_hCMaxSongCount = CreateConVar("sm_rem_maxsongs", "3", "Maximum number of songs to download from a single map.", FCVAR_PLUGIN|FCVAR_SPONLY, true, 1.0);
+    
+    
+    g_hCSongPlayDelay = CreateConVar("sm_rem_songdelay", "4.3", "Amount of time to wait after round end to start playing the song.", FCVAR_PLUGIN|FCVAR_SPONLY, true, 0.0);
+    g_fSongPlayDelay = GetConVarFloat(g_hCSongPlayDelay);
+    HookConVarChange(g_hCSongPlayDelay, OnConVarChanged);
+    
     // -- Reshuffle queued tracks (boolean)
     
     // Register commands.
@@ -106,7 +113,7 @@ public OnConfigsExecuted() {
 }
 
 public Event_RoundEnd(Handle:event, const String:name[], bool:dontBroadcast) {
-    CreateTimer(4.3, Timer_PlayEndRound, _, TIMER_FLAG_NO_MAPCHANGE);
+    CreateTimer(g_fSongPlayDelay, Timer_PlayEndRound, _, TIMER_FLAG_NO_MAPCHANGE);
 }
 
 public Action:Timer_PlayEndRound(Handle:timer, any:data) {
@@ -373,5 +380,11 @@ SetClientVolumeLevel(client, Float:fVolumeLevel) {
         PrintToChat(client, "[SM] Round End Music volume set to %01.2f.", fVolumeLevel);
     } else {
         PrintToChat(client, "[SM] Round End Music muted.");
+    }
+}
+
+public OnConVarChanged(Handle:convar, const String:sOldValue[], const String:sNewValue[]) {
+    if (convar == g_hCSongPlayDelay) {
+        g_fSongPlayDelay = StringToFloat(sNewValue);
     }
 }
