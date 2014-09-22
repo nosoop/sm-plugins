@@ -9,11 +9,7 @@
 #include <clientprefs>
 #include <tf2_stocks>
 
-#define PLUGIN_VERSION          "0.0.0"     // Plugin version.
-
-#define NUM_BUILDINGS_CLIENT    8
-#define NUM_BUILDINGS_CELLCOUNT 9
-#define BUILDING_ANNOT_OFFSET   5751        
+#define PLUGIN_VERSION          "0.0.1"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Building Glow",
@@ -23,9 +19,11 @@ public Plugin:myinfo = {
     url = "http://github.com/nosoop"
 }
 
-new Handle:g_rgClientBuildings[MAXPLAYERS+1],
-    Handle:g_rgClientBuildingTimer[MAXPLAYERS+1],
-    g_rgiClientBuilding[MAXPLAYERS+1];
+#define ARRAY_GLOWENT           0
+#define ARRAY_CLIENT            1
+#define ARRAY_BUILDING          2
+
+new Handle:g_rgBuildingClientProps = INVALID_HANDLE;
 
 // new Handle:g_hCookieBuildingGlow = INVALID_HANDLE;
 // new bool:g_bClientBuildingGlowEnable[MAXPLAYERS+1];
@@ -41,33 +39,13 @@ public OnPluginStart() {
     //     OnClientCookiesCached(i);
     // }
     
-    HookEvent("player_spawn", Hook_PostPlayerSpawn);
     HookEvent("player_builtobject", Event_BuiltObject);
+    g_rgBuildingClientProps = CreateArray(3);
 }
 
-public Hook_PostPlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast) {
-    new client;
-    client = GetClientOfUserId(GetEventInt(event, "userid"));
-    
-    if (TF2_GetPlayerClass(client) != TFClass_Engineer && g_rgClientBuildingTimer[client] != INVALID_HANDLE) {
-        CloseHandle(g_rgClientBuildings[client]);
-        g_rgClientBuildings[client] = INVALID_HANDLE;
-        
-        KillTimer(g_rgClientBuildingTimer[client]);
-        g_rgClientBuildingTimer[client] = INVALID_HANDLE;
-    } else if (g_rgClientBuildingTimer[client] == INVALID_HANDLE) {
-        g_rgClientBuildings[client] = CreateArray();
-        CreateTimer(1.0, Timer_BuildingFinder, client, TIMER_REPEAT);
-    }
+public OnMapStart() {
+    PrecacheModel("effects/strider_bulge_dudv_dx60.vmt");
 }
-
-public Action:Timer_BuildingFinder(Handle:timer, any:client) {
-    if (GetArraySize(g_rgClientBuildings[client]) > 0) {
-        new iBuilding = g_rgiClientBuilding[client] = (g_rgiClientBuilding[client] + 1) % GetArraySize(g_rgClientBuildings[client]);
-        ShowAnnotationToPlayer(client, GetArrayCell(g_rgClientBuildings[client], iBuilding));
-    }
-}
-
 
 public CookieHandler_BuildingGlow(client, CookieMenuAction:action, any:info, String:buffer[], maxlen) {
     // switch (action) {
@@ -79,18 +57,34 @@ public CookieHandler_BuildingGlow(client, CookieMenuAction:action, any:info, Str
     // }
 }
 
-public Action:Event_BuiltObject(Handle:event, const String:name[], bool:dontBroadcast)
-{
-	new iClient = GetClientOfUserId(GetEventInt(event, "userid"));
-	if(!IsPlayerAlive(iClient)) return Plugin_Continue;
-
-	new iBuilding = GetEventInt(event, "index");
-    
-    if (FindValueInArray(g_rgClientBuildings[iClient], iBuilding) == -1) {
-        PushArrayCell(g_rgClientBuildings[iClient], iBuilding);
+public Action:Event_BuiltObject(Handle:event, const String:name[], bool:dontBroadcast) {
+    new iClient = GetClientOfUserId(GetEventInt(event, "userid"));
+    if (!IsPlayerAlive(iClient)) {
+        return Plugin_Continue;
     }
     
+    new iBuilding = GetEventInt(event, "index");
+    
+    // if (FindValueInArray(g_rgBuildingClientProps, iEntity)) == -1) {
+    new iGlowSprite = CreateBuildingSprite(iBuilding);
+    if (iGlowSprite != -1) {
+        PushGlowSpriteToArray(iBuilding, iClient, iGlowSprite);
+    }
+    // }
+    
     return Plugin_Continue;
+}
+
+public OnEntityDestroyed(iEntity) {
+    new iSlot;
+    if ( (iSlot = FindGlowSpriteSlotByValue(ARRAY_BUILDING, iEntity)) == -1 ) {
+        new iGlowEntity = GetArrayCell(g_rgBuildingClientProps, iSlot);
+        if (IsValidEdict(iGlowEntity)) {
+            AcceptEntityInput(iGlowEntity, "kill");
+        }
+        
+        RemoveFromArray(g_rgBuildingClientProps, iSlot);
+    }
 }
 
 public OnClientCookiesCached(client) {
@@ -100,19 +94,63 @@ public OnClientCookiesCached(client) {
     // g_bClientBuildingGlowEnable[client] = (sValue[0] != '\0' && StringToInt(sValue));
 }
 
-public ShowAnnotationToPlayer(client, entity) {
-	new Handle:event = CreateEvent("show_annotation");
-	if (event == INVALID_HANDLE) return;
-	
-    new Float:position[3];
-    GetEntPropVector(entity, Prop_Send, "m_vecOrigin", position);
+PushGlowSpriteToArray(iBuilding, iClient, iGlowSprite) {
+    new iSlot = PushArrayCell(g_rgBuildingClientProps, iGlowSprite);
+    SetArrayCell(g_rgBuildingClientProps, iSlot, iClient, ARRAY_CLIENT);
+    SetArrayCell(g_rgBuildingClientProps, iSlot, iBuilding, ARRAY_BUILDING);
+}
+
+FindGlowSpriteSlotByValue(iSlot, iValue) {
+    new nElements = GetArraySize(g_rgBuildingClientProps);
+    for (new i = 0; i < nElements; i++) {
+        if (GetArrayCell(g_rgBuildingClientProps, i, iSlot) == iValue) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+CreateBuildingSprite(iBuilding) {
+    new iGlowSprite = CreateEntityByName("env_sprite");
     
-    SetEventInt(event, "follow_entindex", entity);
-	SetEventFloat(event, "lifetime", 99999.0);
-	SetEventInt(event, "id", 1*MAXPLAYERS + client + BUILDING_ANNOT_OFFSET);
-	SetEventString(event, "text", "Engineer Building");
-	SetEventString(event, "play_sound", "vo/null.wav");
-    SetEventBool(event, "show_effect", false);
-	SetEventInt(event, "visibilityBitfield", (1 << client));
-	FireEvent(event);
+    if (iGlowSprite > 0 && IsValidEntity(iGlowSprite)) {
+        DispatchKeyValue(iGlowSprite, "classname", "env_sprite");
+        DispatchKeyValue(iGlowSprite, "spawnflags", "1");
+        DispatchKeyValue(iGlowSprite, "rendermode", "0");
+        DispatchKeyValue(iGlowSprite, "rendercolor", "0 0 0");
+        
+        DispatchKeyValue(iGlowSprite, "model", "effects/strider_bulge_dudv_dx60.vmt");
+        SetVariantString("!activator");
+        AcceptEntityInput(iGlowSprite, "SetParent", iBuilding, iGlowSprite, 0);
+        SetVariantString("head");
+        AcceptEntityInput(iGlowSprite, "SetParentAttachment", iGlowSprite, iGlowSprite, 0);
+        
+        DispatchSpawn(iGlowSprite);
+
+        SDKHook(iGlowSprite, SDKHook_SetTransmit, OnBuildingGlowSetTransmit);
+        TeleportEntity(iGlowSprite, Float:{0.0,0.0,-4.0}, NULL_VECTOR, NULL_VECTOR);
+        
+        return iGlowSprite;
+    }
+    return -1;
+}
+
+public Action:OnBuildingGlowSetTransmit(entity, client) {
+    new iCell = FindValueInArray(g_rgBuildingClientProps, entity);
+    
+    if (iCell > -1 && GetArrayCell(g_rgBuildingClientProps, iCell, ARRAY_CLIENT) == client) {
+        return Plugin_Continue;
+    }
+    return Plugin_Stop;
+}
+
+stock bool:IsEnvSpriteEnt(entity) {
+    if (entity != -1 && IsValidEdict(entity) && IsValidEntity(entity) && IsEntNetworkable(entity)) {
+        decl String:sClassName[255];
+        GetEdictClassname(entity, sClassName, 255);
+        if (StrEqual(sClassName, "env_sprite")) {
+            return true;
+        }
+    }
+    return false;
 }
