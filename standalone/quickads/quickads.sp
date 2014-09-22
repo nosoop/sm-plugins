@@ -8,7 +8,7 @@
 #include <morecolors>
 #include <clientprefs>
 
-#define PLUGIN_VERSION          "0.1.0"     // Plugin version.
+#define PLUGIN_VERSION          "0.1.1"     // Plugin version.
 
 #define ADVERTISEMENT_LENGTH    255
 #define ADVERTISEMENT_CONFIG    "data/quickads.txt"
@@ -22,14 +22,19 @@ public Plugin:myinfo = {
     url = "localhost"
 }
 
-new Handle:g_hrgsAdvertisements = INVALID_HANDLE,
-    Handle:g_hTimerAdvertisement = INVALID_HANDLE,
-    g_iCurrentAdvertisement,
+// Array of advertisement strings.
+new Handle:g_hrgsAdvertisements = INVALID_HANDLE;
+
+// Advertisement timer.
+new Handle:g_hTimerAdvertisement = INVALID_HANDLE,
     g_iTimeToNextAdvertisement,
     g_iTimeLastAdvertisementPlay;
 
-new Handle:g_hCAdvertisementInterval = INVALID_HANDLE,  Float:g_fAdvertisementInterval,
-    Handle:g_hAdvertisementCookie = INVALID_HANDLE,     bool:g_bClientSeesAdvertisements[MAXPLAYERS+1];
+// Convars.
+new Handle:g_hCAdvertisementInterval = INVALID_HANDLE,  Float:g_fAdvertisementInterval;
+
+// Clientprefs support to disable advertisements.
+new Handle:g_hAdvertisementCookie = INVALID_HANDLE,     bool:g_bClientSeesAdvertisements[MAXPLAYERS+1];
 
 public OnPluginStart() {
     g_hrgsAdvertisements = CreateArray(ADVERTISEMENT_LENGTH);
@@ -43,7 +48,7 @@ public OnPluginStart() {
     
     AutoExecConfig(true, "plugin.quickads");
     
-    g_hAdvertisementCookie = RegClientCookie("QuickAds", "Sends advertisement text to clients.", CookieAccess_Protected);
+    g_hAdvertisementCookie = RegClientCookie("QuickAds", "Opt-out of text advertisements.", CookieAccess_Protected);
     SetCookiePrefabMenu(g_hAdvertisementCookie, CookieMenu_OnOff_Int, "Text Advertisements", CookieHandler_Advertisements);
     
     for (new i = MaxClients; i > 0; --i) {
@@ -58,7 +63,7 @@ public OnMapStart() {
     ClearArray(g_hrgsAdvertisements);
     LoadAdvertisementsConfig();
     
-    // Call global forward.
+    // TODO: Call global forward.
     
     OnPlayerCountCheck();
 }
@@ -75,7 +80,7 @@ OnPlayerCountCheck() {
 }
 
 public OnClientDisconnect_Post(client) {
-    // Kill advertisements and set timer for next message for when people join.
+    // Pause advertisement timer by killing it and setting the amount of time until next one appropriately.
     if (GetLivePlayerCount() == 0) {
         KillTimer(g_hTimerAdvertisement);
         g_hTimerAdvertisement = INVALID_HANDLE;
@@ -91,15 +96,22 @@ public Action:Timer_FirstAdvertisement(Handle:timer, any:thing) {
 }
 
 public Action:Timer_Advertisement(Handle:timer, any:thing) {
+    PrintNextAdvertisementToChat();
+    return Plugin_Handled;
+}
+
+PrintNextAdvertisementToChat() {
+    static s_iCurrentAdvertisement = 0;
+    
     new nAdvertisements = GetArraySize(g_hrgsAdvertisements);
     if (nAdvertisements == 0) {
-        return Plugin_Handled;
-    } else if (g_iCurrentAdvertisement + 1 >= nAdvertisements) {
-        g_iCurrentAdvertisement = 0;
+        return;
+    } else if (s_iCurrentAdvertisement + 1 >= nAdvertisements) {
+        s_iCurrentAdvertisement = 0;
     }
     
     decl String:sMessage[ADVERTISEMENT_LENGTH];
-    GetArrayString(g_hrgsAdvertisements, g_iCurrentAdvertisement++, sMessage, sizeof(sMessage));
+    GetArrayString(g_hrgsAdvertisements, s_iCurrentAdvertisement++, sMessage, sizeof(sMessage));
     
     // TODO:  Call forward to replace any tokenized values that need replacing.
     
@@ -111,8 +123,6 @@ public Action:Timer_Advertisement(Handle:timer, any:thing) {
     CPrintToChatAll(sMessage);
     
     g_iTimeLastAdvertisementPlay = RoundFloat(GetTickedTime());
-    
-    return Plugin_Handled;
 }
 
 /**
@@ -181,4 +191,4 @@ public CookieHandler_Advertisements(client, CookieMenuAction:action, any:info, S
             OnClientCookiesCached(client);
         }
     }
-} 
+}
