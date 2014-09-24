@@ -9,7 +9,7 @@
 #include <sdktools>
 #include <clientprefs>
 
-#define PLUGIN_VERSION          "0.1.0"
+#define PLUGIN_VERSION          "0.1.1"
 
 public Plugin:myinfo = {
     name = "[TF2] Hat Removal (+clientprefs)",
@@ -82,7 +82,7 @@ public OnClientCookiesCached(client) {
     decl String:sValue[8];
     GetClientCookie(client, g_hCookieViewWearables, sValue, sizeof(sValue));
     
-    g_bClientViewsWearables[client] = (sValue[0] != '\0' && StringToInt(sValue) > 0);
+    g_bClientViewsWearables[client] = (sValue[0] == '\0' || StringToInt(sValue) > 0);
 }
 
 public CookieHandler_RemoveWearables(client, CookieMenuAction:action, any:info, String:buffer[], maxlen) {
