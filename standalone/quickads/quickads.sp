@@ -8,7 +8,7 @@
 #include <morecolors>
 #include <clientprefs>
 
-#define PLUGIN_VERSION          "0.1.1"     // Plugin version.
+#define PLUGIN_VERSION          "0.1.2"     // Plugin version.
 
 #define ADVERTISEMENT_LENGTH    255
 #define ADVERTISEMENT_CONFIG    "data/quickads.txt"
@@ -82,8 +82,10 @@ OnPlayerCountCheck() {
 public OnClientDisconnect_Post(client) {
     // Pause advertisement timer by killing it and setting the amount of time until next one appropriately.
     if (GetLivePlayerCount() == 0) {
-        KillTimer(g_hTimerAdvertisement);
-        g_hTimerAdvertisement = INVALID_HANDLE;
+        if (g_hTimerAdvertisement != INVALID_HANDLE) {
+            KillTimer(g_hTimerAdvertisement);
+            g_hTimerAdvertisement = INVALID_HANDLE;
+        }
         
         g_iTimeToNextAdvertisement = RoundFloat(g_fAdvertisementInterval) - (RoundFloat(GetTickedTime()) - g_iTimeLastAdvertisementPlay);
         g_iTimeToNextAdvertisement = g_iTimeToNextAdvertisement < 0 ? 0 : g_iTimeToNextAdvertisement;
