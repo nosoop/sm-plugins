@@ -9,7 +9,7 @@
 #include <sdktools>
 #include <zonemod>
 
-#define PLUGIN_VERSION          "0.1.0"     // Plugin version.
+#define PLUGIN_VERSION          "0.1.1"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[ANY] Zone Mod (DoD_Zones Config Loader)",
@@ -41,6 +41,7 @@ public OnPluginStart() {
 
 public OnMapStart() {
     ClearArray(g_hArrayZones);
+    ClearArray(g_hArrayZoneSettings);
 
     decl String:sZoneConfig[PLATFORM_MAX_PATH], String:sMapName[64];
     GetCurrentMap(sMapName, sizeof(sMapName));
@@ -82,6 +83,8 @@ public OnMapStart() {
 
 public OnPluginEnd() {
     decl String:sZoneName[255];
+    
+    // Remove all zones associated with the plugin.
     while (GetArraySize(g_hArrayZones) > 0) {
         GetArrayString(g_hArrayZones, 0, sZoneName, sizeof(sZoneName));
         Zone_Remove(sZoneName);
@@ -93,35 +96,45 @@ public OnPluginEnd() {
 public Hook_OnDoDZoneStartTouch(iZone, iEntity) {
     if (iEntity < MaxClients && iEntity > 0 && IsClientConnected(iEntity) && IsPlayerAlive(iEntity)) {
         new iZoneSettings = FindValueInArray(g_hArrayZoneSettings, iZone);
-        if (GetArrayCell(g_hArrayZoneSettings, iZoneSettings, ZONESTRUCT_TEAM) == _:GetClientTeam(iEntity)) {
+        
+        // Apply on player if part of the team specified in the restrict_team keyvalue.
+        if (iZoneSettings != -1 &&
+                GetArrayCell(g_hArrayZoneSettings, iZoneSettings, ZONESTRUCT_TEAM) == _:GetClientTeam(iEntity)) {
+            
             switch (GetArrayCell(g_hArrayZoneSettings, iZoneSettings, ZONESTRUCT_PUNISHMENT)) {
                 case PUNISHMENT_ANNOUNCE: {
                     PrintToChatAll("%N has entered a zone.", iEntity);
                 }
                 case PUNISHMENT_BOUNCE: {
-                    decl Float:vVelocity[3];
+                    decl Float:vVelocity[3], Float:fZVelBuffer;
                     GetEntPropVector(iEntity, Prop_Send, "m_vecVelocity", vVelocity);
                     
-                    // Push back at a rate of 200 HU/s.
-                    for (new i = 0; i < 2; i++) {
-                        if (FloatAbs(vVelocity[i]) < 200.0) {
-                            vVelocity[i] = FloatCompare(vVelocity[i], 0.0) > 0 ? 200.0 : -200.0;
-                        }
+                    fZVelBuffer = vVelocity[2];
+                    vVelocity[2] = 0.0;
+                    
+                    // Push back at a rate of 300 HU/s in the specified direction at minimum.
+                    if (GetVectorLength(vVelocity, true) < 90000.0) {
+                        NormalizeVector(vVelocity, vVelocity);
+                        ScaleVector(vVelocity, 300.0);
                     }
+                    
+                    vVelocity[2] = fZVelBuffer;
                     
                     // Bounce the player back down if necessary.
                     if (FloatCompare(vVelocity[2], 0.0) > 0) {
                         vVelocity[2] *= -0.1;
                     }
+                    
+                    TeleportEntity(iEntity, NULL_VECTOR, NULL_VECTOR, vVelocity);
                 }
                 case PUNISHMENT_SLAY: {
                     ForcePlayerSuicide(iEntity);
                 }
                 case PUNISHMENT_NOSHOOT: {
-                    // TODO Implement no shoot.
+                    // TODO Implement no shoot?
                 }
                 case PUNISHMENT_MELEE: {
-                    // TODO Implement melee.
+                    // TODO Implement melee?
                 }
                 case PUNISHMENT_CUSTOM: {
                     // TODO Implement custom?
