@@ -9,7 +9,7 @@
 #include <sdktools>
 #include <zonemod>
 
-#define PLUGIN_VERSION          "0.0.0"     // Plugin version.
+#define PLUGIN_VERSION          "0.1.0"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[ANY] Zone Mod (DoD_Zones Config Loader)",
@@ -93,15 +93,42 @@ public OnPluginEnd() {
 public Hook_OnDoDZoneStartTouch(iZone, iEntity) {
     if (iEntity < MaxClients && iEntity > 0 && IsClientConnected(iEntity) && IsPlayerAlive(iEntity)) {
         new iZoneSettings = FindValueInArray(g_hArrayZoneSettings, iZone);
-        switch (GetArrayCell(g_hArrayZoneSettings, iZoneSettings, ZONESTRUCT_PUNISHMENT)) {
-            case PUNISHMENT_SLAY: {
-                ForcePlayerSuicide(iEntity);
-            }
-            case PUNISHMENT_DEFAULT: {
-                ForcePlayerSuicide(iEntity);
-            }
-            default: {
-                ForcePlayerSuicide(iEntity);
+        if (GetArrayCell(g_hArrayZoneSettings, iZoneSettings, ZONESTRUCT_TEAM) == _:GetClientTeam(iEntity)) {
+            switch (GetArrayCell(g_hArrayZoneSettings, iZoneSettings, ZONESTRUCT_PUNISHMENT)) {
+                case PUNISHMENT_ANNOUNCE: {
+                    PrintToChatAll("%N has entered a zone.", iEntity);
+                }
+                case PUNISHMENT_BOUNCE: {
+                    decl Float:vVelocity[3];
+                    GetEntPropVector(iEntity, Prop_Send, "m_vecVelocity", vVelocity);
+                    
+                    // Push back at a rate of 200 HU/s.
+                    for (new i = 0; i < 2; i++) {
+                        if (FloatAbs(vVelocity[i]) < 200.0) {
+                            vVelocity[i] = FloatCompare(vVelocity[i], 0.0) > 0 ? 200.0 : -200.0;
+                        }
+                    }
+                    
+                    // Bounce the player back down if necessary.
+                    if (FloatCompare(vVelocity[2], 0.0) > 0) {
+                        vVelocity[2] *= -0.1;
+                    }
+                }
+                case PUNISHMENT_SLAY: {
+                    ForcePlayerSuicide(iEntity);
+                }
+                case PUNISHMENT_NOSHOOT: {
+                    // TODO Implement no shoot.
+                }
+                case PUNISHMENT_MELEE: {
+                    // TODO Implement melee.
+                }
+                case PUNISHMENT_CUSTOM: {
+                    // TODO Implement custom?
+                }
+                default: {
+                    ForcePlayerSuicide(iEntity);
+                }
             }
         }
     }
