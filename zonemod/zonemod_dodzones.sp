@@ -9,7 +9,7 @@
 #include <sdktools>
 #include <zonemod>
 
-#define PLUGIN_VERSION          "0.1.1"     // Plugin version.
+#define PLUGIN_VERSION          "0.1.2"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[ANY] Zone Mod (DoD_Zones Config Loader)",
@@ -72,8 +72,8 @@ public OnMapStart() {
                 PushArrayString(g_hArrayZones, sZoneName);
                 
                 new iArrayPosition = PushArrayCell(g_hArrayZoneSettings, iZone);
-                SetArrayCell(g_hArrayZoneSettings, iArrayPosition, ZONESTRUCT_TEAM, iZoneTeamRestriction);
-                SetArrayCell(g_hArrayZoneSettings, iArrayPosition, ZONESTRUCT_PUNISHMENT, iZonePunishment);
+                SetArrayCell(g_hArrayZoneSettings, iArrayPosition, iZoneTeamRestriction, ZONESTRUCT_TEAM);
+                SetArrayCell(g_hArrayZoneSettings, iArrayPosition, iZonePunishment, ZONESTRUCT_PUNISHMENT);
             }
         } while (KvGotoNextKey(kv));
      
@@ -98,49 +98,59 @@ public Hook_OnDoDZoneStartTouch(iZone, iEntity) {
         new iZoneSettings = FindValueInArray(g_hArrayZoneSettings, iZone);
         
         // Apply on player if part of the team specified in the restrict_team keyvalue.
-        if (iZoneSettings != -1 &&
-                GetArrayCell(g_hArrayZoneSettings, iZoneSettings, ZONESTRUCT_TEAM) == _:GetClientTeam(iEntity)) {
+        if (iZoneSettings != -1) {
+            new iZoneTeam = GetArrayCell(g_hArrayZoneSettings, iZoneSettings, ZONESTRUCT_TEAM);
             
-            switch (GetArrayCell(g_hArrayZoneSettings, iZoneSettings, ZONESTRUCT_PUNISHMENT)) {
-                case PUNISHMENT_ANNOUNCE: {
-                    PrintToChatAll("%N has entered a zone.", iEntity);
-                }
-                case PUNISHMENT_BOUNCE: {
-                    decl Float:vVelocity[3], Float:fZVelBuffer;
-                    GetEntPropVector(iEntity, Prop_Send, "m_vecVelocity", vVelocity);
-                    
-                    fZVelBuffer = vVelocity[2];
-                    vVelocity[2] = 0.0;
-                    
-                    // Push back at a rate of 300 HU/s in the specified direction at minimum.
-                    if (GetVectorLength(vVelocity, true) < 90000.0) {
-                        NormalizeVector(vVelocity, vVelocity);
-                        ScaleVector(vVelocity, 300.0);
+            PrintToServer("Client %d started touching zone.", iEntity);
+            
+            if (iZoneTeam == 0 || iZoneTeam == _:GetClientTeam(iEntity)) {
+                new iZonePunishment = GetArrayCell(g_hArrayZoneSettings, iZoneSettings, ZONESTRUCT_PUNISHMENT);
+                PrintToServer("Punishment is %d.", iZonePunishment);
+                
+                switch (iZonePunishment) {
+                    case PUNISHMENT_ANNOUNCE: {
+                        PrintToChatAll("%N has entered a zone.", iEntity);
                     }
-                    
-                    vVelocity[2] = fZVelBuffer;
-                    
-                    // Bounce the player back down if necessary.
-                    if (FloatCompare(vVelocity[2], 0.0) > 0) {
-                        vVelocity[2] *= -0.1;
+                    case PUNISHMENT_BOUNCE: {
+                        decl Float:vVelocity[3], Float:fZVelBuffer;
+                        GetEntPropVector(iEntity, Prop_Data, "m_vecVelocity", vVelocity);
+                        
+                        fZVelBuffer = vVelocity[2];
+                        vVelocity[2] = 0.0;
+                        
+                        // Push back at a rate of 300 HU/s in the specified direction at minimum.
+                        if (GetVectorLength(vVelocity, true) < 90000.0) {
+                            NormalizeVector(vVelocity, vVelocity);
+                            ScaleVector(vVelocity, 300.0);
+                        }
+                        
+                        vVelocity[2] = fZVelBuffer;
+                        
+                        // Bounce the player back down if necessary.
+                        if (FloatCompare(vVelocity[2], 0.0) > 0) {
+                            vVelocity[2] *= -0.1;
+                        }
+                        
+                        TeleportEntity(iEntity, NULL_VECTOR, NULL_VECTOR, vVelocity);
+                        
+                        // Bounces back everything.  Or tries to, anyways.
+                        SetEntProp(iZone, Prop_Send, "m_CollisionGroup", 17);
                     }
-                    
-                    TeleportEntity(iEntity, NULL_VECTOR, NULL_VECTOR, vVelocity);
-                }
-                case PUNISHMENT_SLAY: {
-                    ForcePlayerSuicide(iEntity);
-                }
-                case PUNISHMENT_NOSHOOT: {
-                    // TODO Implement no shoot?
-                }
-                case PUNISHMENT_MELEE: {
-                    // TODO Implement melee?
-                }
-                case PUNISHMENT_CUSTOM: {
-                    // TODO Implement custom?
-                }
-                default: {
-                    ForcePlayerSuicide(iEntity);
+                    case PUNISHMENT_SLAY: {
+                        ForcePlayerSuicide(iEntity);
+                    }
+                    case PUNISHMENT_NOSHOOT: {
+                        // TODO Implement no shoot?
+                    }
+                    case PUNISHMENT_MELEE: {
+                        // TODO Implement melee?
+                    }
+                    case PUNISHMENT_CUSTOM: {
+                        // TODO Implement custom?
+                    }
+                    default: {
+                        ForcePlayerSuicide(iEntity);
+                    }
                 }
             }
         }
