@@ -8,7 +8,7 @@
 #undef REQUIRE_PLUGIN                       // Support late loads.
 #include <roundendsongs>
 
-#define PLUGIN_VERSION          "0.3.0"     // Plugin version.
+#define PLUGIN_VERSION          "0.3.1"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "Round End Music (SQLite)",
@@ -53,7 +53,6 @@ public Action:REM_OnSongsRequested(nSongs) {
     new nSongsAdded;
     new songIds[nSongs];
 
-    // Connect to database.
     new Handle:hDatabase = GetSongDatabaseHandle();
     
     // Create sorter function.
@@ -63,13 +62,14 @@ public Action:REM_OnSongsRequested(nSongs) {
     
     decl String:sSongQuery[256];
     Format(sSongQuery, sizeof(sSongQuery),
-            "SELECT artist,track,filepath,file_id FROM %s WHERE enabled = 1 ORDER BY %s LIMIT %d",
+            "SELECT artist,track,filepath,file_id FROM `%s` WHERE enabled = 1 ORDER BY %s LIMIT %d",
             g_sTableName, sWeightFunction, nSongs);
     
     new Handle:hSongQuery = SQL_Query(hDatabase, sSongQuery);
     
     decl String:rgsSongData[3][PLATFORM_MAX_PATH], songId;
     while (SQL_FetchRow(hSongQuery)) {
+        // Fetch song data.
         for (new i = 0; i < 3; i++) {
             SQL_FetchString(hSongQuery, i, rgsSongData[i], sizeof(rgsSongData[]));
         }
@@ -84,10 +84,11 @@ public Action:REM_OnSongsRequested(nSongs) {
     }
     CloseHandle(hSongQuery);
     
+    // Increment playcounts for added songs.
     for (new i = 0; i < nSongsAdded; i++) {
         decl String:sUpdateQuery[255];
         Format(sUpdateQuery, sizeof(sUpdateQuery),
-                "UPDATE %s SET playcount=playcount+1 WHERE file_id = %d",
+                "UPDATE `%s` SET playcount=playcount+1 WHERE file_id = %d",
                 g_sTableName, songIds[i]);
         SQL_FastQuery(hDatabase, sUpdateQuery);
     }
@@ -98,11 +99,12 @@ public Action:REM_OnSongsRequested(nSongs) {
 GetHighestPlayCount(Handle:hDatabase) {
     decl String:sPlayCountQuery[64];
     Format(sPlayCountQuery, sizeof(sPlayCountQuery),
-            "SELECT MAX(playcount) FROM %s WHERE enabled=1",
+            "SELECT MAX(playcount) FROM `%s` WHERE enabled=1",
             g_sTableName);
-    new Handle:hPlayCountQuery = SQL_Query(hDatabase, sPlayCountQuery);
     
+    new Handle:hPlayCountQuery = SQL_Query(hDatabase, sPlayCountQuery);
     SQL_FetchRow(hPlayCountQuery);
+    
     new nTopPlays = SQL_FetchInt(hPlayCountQuery, 0);
     
     CloseHandle(hPlayCountQuery);
@@ -130,14 +132,26 @@ Handle:GetSongDatabaseHandle() {
 }
 
 /**
- * TODO Get the highest playcount and do song weighting?
  */
 public OnConVarChanged(Handle:hConVar, const String:sOldValue[], const String:sNewValue[]) {
     if (hConVar == g_hCDatabaseName) {
         strcopy(g_sDatabaseName, sizeof(g_sDatabaseName), sNewValue);
     } else if (hConVar == g_hCTableName) {
-        strcopy(g_sTableName, sizeof(g_sTableName), sNewValue);
+        if (IsCleanTableValue(sNewValue)) {
+            strcopy(g_sTableName, sizeof(g_sTableName), sNewValue);
+        } else {
+            LogError("Table changed to use unsanitary table value %s -- attempting to revert.", sNewValue);
+            if (IsCleanTableValue(sOldValue)) {
+                SetConVarString(g_hCTableName, sOldValue);
+            } else {
+                SetFailState("Previous table value %s is also dirty.  Pausing.");
+            }
+        }
     } else if (hConVar == g_hCSongDir) {
         strcopy(g_sSongDir, sizeof(g_sSongDir), sNewValue);
     }
+}
+
+bool:IsCleanTableValue(const String:sTable[]) {
+    return (StrContains(sTable, "`") == -1);
 }
