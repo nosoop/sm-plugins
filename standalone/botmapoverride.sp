@@ -7,7 +7,7 @@
 #include <sourcemod>
 #include <mapchooser>
 
-#define PLUGIN_VERSION          "1.0.0"     // Plugin version.
+#define PLUGIN_VERSION          "1.0.1"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Bot-only Map Override",
@@ -33,7 +33,7 @@ SetNextBotMap() {
     GetCurrentMap(sCurrentMap, MAP_NAME_LENGTH);
         
     // Validate read map list handle
-    if (ReadMapList(hMapList) == hMapList) {
+    if (ReadMapList(hMapList) != INVALID_HANDLE) {
         new Handle:hExcludedMaps = CreateArray(MAP_NAME_LENGTH),
             Handle:hCustomExcludes = CreateArray(MAP_NAME_LENGTH),
             Handle:hValidPreviousMaps = CreateArray(MAP_NAME_LENGTH);
@@ -83,10 +83,13 @@ SetNextBotMap() {
 
 public Hook_OnGameOver(Handle:hEvent, const String:sName[], bool:dontBroadcast) {
     decl String:sNextMap[MAP_NAME_LENGTH];
-    new bool:bNextMapSet = GetNextMap(sNextMap, sizeof(sNextMap));
+    new bool:bNextMapSet = GetNextMap(sNextMap, sizeof(sNextMap)),
+        bool:bNextMapSuitable;
     
-    if (GetLivePlayerCount() == 0 && bNextMapSet 
-            && !MapIsNotCustomExcluded(sNextMap) && !MapHasNavigationMesh(sNextMap)) {
+    bNextMapSuitable = bNextMapSet ?
+            (MapIsNotCustomExcluded(sNextMap) && MapHasNavigationMesh(sNextMap)) : false;
+    
+    if (GetLivePlayerCount() == 0 && !bNextMapSuitable) {
         SetNextBotMap();
     }
 }
