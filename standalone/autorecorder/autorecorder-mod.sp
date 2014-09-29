@@ -15,13 +15,13 @@
 *                 [*] Changed manual recording to override automatic recording
 *                 [+] Added seconds to demo names
 * July 14, 2014 - v.1.2.0:
-*               [+] Exposed current demo tick.
+*                 [+] Exposed current demo tick.
 */
 
 #pragma semicolon 1
 #include <sourcemod>
 
-#define PLUGIN_VERSION "1.2.0"
+#define PLUGIN_VERSION "1.2.1"
 
 new Handle:g_hTvEnabled = INVALID_HANDLE;
 new Handle:g_hAutoRecord = INVALID_HANDLE;
@@ -63,8 +63,7 @@ public OnPluginStart() {
     
     decl String:sPath[PLATFORM_MAX_PATH];
     GetConVarString(g_hDemoPath, sPath, sizeof(sPath));
-    if(!DirExists(sPath))
-    {
+    if(!DirExists(sPath)) {
         InitDirectory(sPath);
     }
     
@@ -78,47 +77,38 @@ public OnPluginStart() {
 
 public APLRes:AskPluginLoad2(Handle:hMySelf, bool:bLate, String:strError[], iMaxErrors) {
     RegPluginLibrary("autorecorder-mod");
-    CreateNative("GetDemoTick", Native_GetDemoTick);
+    CreateNative("GetDemoTick", Native_GetApproximateDemoTick);
     
     return APLRes_Success;
 }
 
-public OnConVarChanged(Handle:convar, const String:oldValue[], const String:newValue[])
-{
-    if(!DirExists(newValue))
-    {
+public OnConVarChanged(Handle:convar, const String:oldValue[], const String:newValue[]) {
+    if (!DirExists(newValue)) {
         InitDirectory(newValue);
     }
 }
 
-public OnMapEnd()
-{
-    if(g_bIsRecording)
-    {
+public OnMapEnd() {
+    if (g_bIsRecording) {
         StopRecord();
         g_bIsManual = false;
     }
 }
 
-public OnClientPutInServer(client)
-{
+public OnClientPutInServer(client) {
     CheckStatus();
 }
 
-public OnClientDisconnect_Post(client)
-{
+public OnClientDisconnect_Post(client) {
     CheckStatus();
 }
 
-public Action:Timer_CheckStatus(Handle:Timer)
-{
+public Action:Timer_CheckStatus(Handle:Timer) {
     CheckStatus();
 }
 
-public Action:Command_Record(client, args)
-{
-    if(g_bIsRecording)
-    {
+public Action:Command_Record(client, args) {
+    if (g_bIsRecording) {
         ReplyToCommand(client, "[SM] SourceTV is already recording!");
         return Plugin_Handled;
     }
@@ -131,18 +121,15 @@ public Action:Command_Record(client, args)
     return Plugin_Handled;
 }
 
-public Action:Command_StopRecord(client, args)
-{
-    if(!g_bIsRecording)
-    {
+public Action:Command_StopRecord(client, args) {
+    if (!g_bIsRecording) {
         ReplyToCommand(client, "[SM] SourceTV is not recording!");
         return Plugin_Handled;
     }
     
     StopRecord();
     
-    if(g_bIsManual)
-    {
+    if (g_bIsManual) {
         g_bIsManual = false;
         CheckStatus();
     }
@@ -152,12 +139,10 @@ public Action:Command_StopRecord(client, args)
     return Plugin_Handled;
 }
 
-public CheckStatus()
-{
-    if(GetConVarBool(g_hAutoRecord) && !g_bIsManual)
-    {
+public CheckStatus() {
+    if (GetConVarBool(g_hAutoRecord) && !g_bIsManual) {
         new iMinClients = GetConVarInt(g_hMinPlayersStart);
-        new iNumClients = GetClientCount(true);
+        new iNumClients = GetLivePlayerCount();
         
         new iTimeStart = GetConVarInt(g_hTimeStart);
         new iTimeStop = GetConVarInt(g_hTimeStop);
@@ -167,21 +152,16 @@ public CheckStatus()
         FormatTime(sCurrentTime, sizeof(sCurrentTime), "%H", GetTime());
         new iCurrentTime = StringToInt(sCurrentTime);
         
-        if(iNumClients >= iMinClients+1 && (iTimeStart < 0 || (iCurrentTime >= iTimeStart && (bReverseTimes || iCurrentTime < iTimeStop))))
-        {
+        if(iNumClients >= iMinClients && (iTimeStart < 0 || (iCurrentTime >= iTimeStart && (bReverseTimes || iCurrentTime < iTimeStop)))) {
             StartRecord();
-        }
-        else if(g_bIsRecording && !GetConVarBool(g_hFinishMap) && (iTimeStop < 0 || iCurrentTime >= iTimeStop))
-        {
+        } else if(g_bIsRecording && !GetConVarBool(g_hFinishMap) && (iTimeStop < 0 || iCurrentTime >= iTimeStop)) {
             StopRecord();
         }
     }
 }
 
-public StartRecord()
-{
-    if(GetConVarBool(g_hTvEnabled) && !g_bIsRecording)
-    {
+public StartRecord() {
+    if(GetConVarBool(g_hTvEnabled) && !g_bIsRecording) {
         decl String:sPath[PLATFORM_MAX_PATH], String:sTime[16], String:sMap[32];
         
         GetConVarString(g_hDemoPath, sPath, sizeof(sPath));
@@ -196,27 +176,22 @@ public StartRecord()
     }
 }
 
-public StopRecord()
-{
-    if(GetConVarBool(g_hTvEnabled))
-    {
+public StopRecord() {
+    if (GetConVarBool(g_hTvEnabled)) {
         ServerCommand("tv_stoprecord");
         g_bIsRecording = false;
         g_iDemoStartTick = -1;
     }
 }
 
-public InitDirectory(const String:sDir[])
-{
+public InitDirectory(const String:sDir[]) {
     decl String:sPieces[32][PLATFORM_MAX_PATH];
     new String:sPath[PLATFORM_MAX_PATH];
     new iNumPieces = ExplodeString(sDir, "/", sPieces, sizeof(sPieces), sizeof(sPieces[]));
     
-    for(new i = 0; i < iNumPieces; i++)
-    {
+    for (new i = 0; i < iNumPieces; i++) {
         Format(sPath, sizeof(sPath), "%s/%s", sPath, sPieces[i]);
-        if(!DirExists(sPath))
-        {
+        if (!DirExists(sPath)) {
             CreateDirectory(sPath, 509);
         }
     }
@@ -232,4 +207,14 @@ public GetApproximateDemoTick() {
 
 public Native_GetApproximateDemoTick(Handle:plugin, numParams) {
     return GetApproximateDemoTick();
+}
+
+GetLivePlayerCount() {
+    new nPlayers;
+    for (new i = MaxClients; i > 0; --i) {
+        if (IsClientInGame(i) && !IsFakeClient(i)) {
+            nPlayers++;
+        }
+    }
+    return nPlayers;
 }
