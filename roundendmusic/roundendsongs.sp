@@ -8,7 +8,7 @@
 #include <sdktools>
 #include <clientprefs>
 
-#define PLUGIN_VERSION          "1.6.0"     // Plugin version.
+#define PLUGIN_VERSION          "1.6.1"     // Plugin version.
 
 #define ARRAY_ARTIST            0
 #define ARRAY_TITLE             1
@@ -113,7 +113,11 @@ public OnConfigsExecuted() {
 }
 
 public Event_RoundEnd(Handle:event, const String:name[], bool:dontBroadcast) {
-    CreateTimer(g_fSongPlayDelay, Timer_PlayEndRound, _, TIMER_FLAG_NO_MAPCHANGE);
+    if (GetListeningPlayerCount() > 0) {
+        CreateTimer(g_fSongPlayDelay, Timer_PlayEndRound, _, TIMER_FLAG_NO_MAPCHANGE);
+    } else {
+        PrintToServer("[rem] No players available to play endround music to.  Skipping...");
+    }
 }
 
 public Action:Timer_PlayEndRound(Handle:timer, any:data) {
@@ -387,4 +391,14 @@ public OnConVarChanged(Handle:convar, const String:sOldValue[], const String:sNe
     if (convar == g_hCSongPlayDelay) {
         g_fSongPlayDelay = StringToFloat(sNewValue);
     }
+}
+
+GetListeningPlayerCount() {
+    new nPlayers;
+    for (new i = MaxClients; i > 0; --i) {
+        if (IsClientInGame(i) && !IsFakeClient(i) && FloatCompare(g_rgfClientVolume[i], 0.0) == 1) {
+            nPlayers++;
+        }
+    }
+    return nPlayers;
 }
