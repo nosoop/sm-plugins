@@ -7,7 +7,7 @@
 #include <sourcemod>
 #include <mapchooser>
 
-#define PLUGIN_VERSION          "1.0.1"     // Plugin version.
+#define PLUGIN_VERSION          "1.0.2"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Bot-only Map Override",
@@ -26,12 +26,13 @@ public OnPluginStart() {
     HookEvent("teamplay_game_over", Hook_OnGameOver);
 }
 
-SetNextBotMap() {
+bool:SetNextBotMap() {
+    new bool:bSuccess;
     new String:sCurrentMap[MAP_NAME_LENGTH];
     new Handle:hMapList = CreateArray(MAP_NAME_LENGTH);
     
     GetCurrentMap(sCurrentMap, MAP_NAME_LENGTH);
-        
+    
     // Validate read map list handle
     if (ReadMapList(hMapList) != INVALID_HANDLE) {
         new Handle:hExcludedMaps = CreateArray(MAP_NAME_LENGTH),
@@ -72,6 +73,7 @@ SetNextBotMap() {
         
         if (SetNextMap(sNextMapOverride)) {
             PrintToServer("[botchangemap] No active players.  Changed next map to %s", sNextMapOverride);
+            bSuccess = true;
         }
         
         CloseHandle(hMapList);
@@ -79,18 +81,21 @@ SetNextBotMap() {
         CloseHandle(hCustomExcludes);
         CloseHandle(hExcludedMaps);
     }
+    return bSuccess;
 }
 
 public Hook_OnGameOver(Handle:hEvent, const String:sName[], bool:dontBroadcast) {
     decl String:sNextMap[MAP_NAME_LENGTH];
-    new bool:bNextMapSet = GetNextMap(sNextMap, sizeof(sNextMap)),
-        bool:bNextMapSuitable;
+    new bool:bNextMapSet = GetNextMap(sNextMap, sizeof(sNextMap));
     
-    bNextMapSuitable = bNextMapSet ?
+    if (GetLivePlayerCount() == 0) {
+        new bool:bNextMapSuitable;
+        bNextMapSuitable = bNextMapSet ?
             (MapIsNotCustomExcluded(sNextMap) && MapHasNavigationMesh(sNextMap)) : false;
-    
-    if (GetLivePlayerCount() == 0 && !bNextMapSuitable) {
-        SetNextBotMap();
+        
+        if (!bNextMapSuitable) {
+            SetNextBotMap();
+        }
     }
 }
 
@@ -117,7 +122,7 @@ AddCustomMapExclusions(&Handle:hMapList) {
     }
 }
 
-MapIsNotCustomExcluded(const String:sMapName[]) {
+bool:MapIsNotCustomExcluded(const String:sMapName[]) {
     new Handle:hCustomExcludes = CreateArray(MAP_NAME_LENGTH);
     AddCustomMapExclusions(hCustomExcludes);
     
@@ -127,14 +132,14 @@ MapIsNotCustomExcluded(const String:sMapName[]) {
     return bAcceptable;
 }
 
-MapHasNavigationMesh(const String:sMapName[]) {
+bool:MapHasNavigationMesh(const String:sMapName[]) {
     decl String:sNavFileBuffer[PLATFORM_MAX_PATH];
     Format(sNavFileBuffer, sizeof(sNavFileBuffer), "maps/%s.nav", sMapName);
     
     return FileExists(sNavFileBuffer, true);
 }
 
-GetLivePlayerCount() {
+_:GetLivePlayerCount() {
     new nPlayers;
     for (new i = MaxClients; i > 0; --i) {
         if (IsClientInGame(i) && !IsFakeClient(i)) {
