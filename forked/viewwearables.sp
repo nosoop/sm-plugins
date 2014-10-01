@@ -9,7 +9,7 @@
 #include <sdktools>
 #include <clientprefs>
 
-#define PLUGIN_VERSION          "0.1.2"
+#define PLUGIN_VERSION              "0.1.2"
 
 public Plugin:myinfo = {
     name = "[TF2] Hat Removal (+clientprefs)",
@@ -19,13 +19,18 @@ public Plugin:myinfo = {
     url = "http://www.sourcemod.net/"
 };
 
+#define CONFIG_COMMENT              ";"
+#define WEARABLE_EXEMPTION_CONFIG   "data/viewwearables.txt"
+
 // Cookie handle and client preference array.
 new Handle:g_hCookieViewWearables = INVALID_HANDLE,     bool:g_bClientViewsWearables[MAXPLAYERS+1];
 
-public OnPluginStart() {
-    CreateConVar("sm_viewwearables_version", PLUGIN_VERSION, "Version of Hat Removal", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_UNLOGGED|FCVAR_DONTRECORD|FCVAR_REPLICATED|FCVAR_NOTIFY);
+new Handle:g_hItemDefsExempted = INVALID_HANDLE;
 
-    // RegConsoleCmd("sm_togglehat", cbToggleHat, "Toggles hat visibility");
+public OnPluginStart() {
+    CreateConVar("sm_viewwearables_version", PLUGIN_VERSION, "Version of Hat Removal (+clientprefs)", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_UNLOGGED|FCVAR_DONTRECORD|FCVAR_REPLICATED|FCVAR_NOTIFY);
+
+    RegAdminCmd("sm_viewwearables_reload", Command_ReloadExemptions, ADMFLAG_ROOT, "Reloads exemption-by-defindex list of wearables.");
     
     g_hCookieViewWearables = RegClientCookie("ViewWearables", "Show / hide other player's hats.", CookieAccess_Protected);
     
@@ -40,6 +45,9 @@ public OnPluginStart() {
         
         OnClientCookiesCached(i);
     }
+    
+    g_hItemDefsExempted = CreateArray();
+    LoadItemExemptions();
     
     // Handle late-loading wearables.
     new iWearable = -1;
@@ -58,23 +66,23 @@ public OnEntityCreated(entity, const String:sClassName[]) {
     }
 }
 
-OnWearableCreated(iWearable) {
-    // The delay is present so m_ModelName can be set.
-    CreateTimer(0.1, Timer_WearableCheck, iWearable);
+/**
+ * Called when a tf_wearable instance is created.
+ */
+OnWearableCreated(iWearable, bool:bRetry = false) {
+    new iItemDefinitionIndex = GetEntProp(iWearable, Prop_Send, "m_iItemDefinitionIndex");
+    
+    // If the defindex is 0, the wearable isn't fully prepared yet.
+    if (iItemDefinitionIndex == 0 && !bRetry) {
+        CreateTimer(0.01, Timer_RetryOnWearableCreated, iWearable);
+    } else if (FindValueInArray(g_hItemDefsExempted, iItemDefinitionIndex) == -1) {
+        SDKHook(iWearable, SDKHook_SetTransmit, SDKHook_OnWearableTrasnmit);
+    }
 }
 
-public Action:Timer_WearableCheck(Handle:Timer, any:entity) {
-    if (IsValidEdict(entity)) {
-        // TODO Change detection method
-        // Exceptions given to the Razorback, Darwin's Danger Shield or Gunboats.
-        new String:sModel[256];
-        GetEntPropString(entity, Prop_Data, "m_ModelName", sModel, sizeof(sModel));
-        if (!( StrContains(sModel, "croc_shield") != -1 
-                || StrContains(sModel, "c_rocketboots_soldier") != -1
-                || StrContains(sModel, "knife_shield") != -1 ) ) {
-            SDKHook(entity, SDKHook_SetTransmit, SDKHook_OnWearableTrasnmit);
-        }
-    }
+public Action:Timer_RetryOnWearableCreated(Handle:hTimer, any:iWearable) {
+    OnWearableCreated(iWearable, true);
+    return Plugin_Handled;
 }
 
 public Action:SDKHook_OnWearableTrasnmit(iEntity, iClient) {
@@ -82,6 +90,39 @@ public Action:SDKHook_OnWearableTrasnmit(iEntity, iClient) {
         return Plugin_Continue;
     } else {
         return Plugin_Handled;
+    }
+}
+
+public Action:Command_ReloadExemptions(client, args) {
+    LoadItemExemptions();
+    return Plugin_Handled;
+}
+
+LoadItemExemptions() {
+    ClearArray(g_hItemDefsExempted);
+
+    decl String:sItemExemptions[PLATFORM_MAX_PATH];
+    BuildPath(Path_SM, sItemExemptions, sizeof(sItemExemptions), WEARABLE_EXEMPTION_CONFIG);
+    
+    // Exemptions file -- reads each line expecting a defindex value
+    // Can contain empty lines or comments starting with the ";" character
+    if (FileExists(sItemExemptions)) {
+        new Handle:hItemExemptions = OpenFile(sItemExemptions, "r");
+        
+        if (hItemExemptions != INVALID_HANDLE) {
+            new String:sDefIndex[32], String:sConfigLine[256];
+            
+            while (ReadFileLine(hItemExemptions, sConfigLine, sizeof(sConfigLine))) {
+                SplitString(sConfigLine, CONFIG_COMMENT, sDefIndex, sizeof(sDefIndex));
+                TrimString(sDefIndex);
+                
+                if (strlen(sDefIndex) == 0) {
+                    continue;
+                }
+                PushArrayCell(g_hItemDefsExempted, StringToInt(sDefIndex));
+            }
+            CloseHandle(hItemExemptions);
+        }
     }
 }
 
