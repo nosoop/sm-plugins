@@ -34,11 +34,22 @@ new g_rgDownloadFilterBitflags[] = {
 
 new g_rgbClientDownloadFilters[MAXPLAYERS+1];
 
+new Handle:g_hOnDownloadFlagsSet = INVALID_HANDLE;
+
 public OnPluginStart() {
     RegAdminCmd("sm_showclientdownloadfilters", Command_ShowClientDownloadFilters, ADMFLAG_ROOT, "Shows active download filters on each client.");
     for (new i = MaxClients; i > 0; --i) {
         OnClientPostAdminCheck(i);
     }
+    
+    g_hOnDownloadFlagsSet = CreateGlobalForward("OnClientDownloadFilterFlagsSet", ET_Ignore, Param_Cell, Param_Cell);
+}
+
+public APLRes:AskPluginLoad2(Handle:hMySelf, bool:bLate, String:strError[], iMaxErrors) {
+    RegPluginLibrary("clientdownloadfilters");
+    CreateNative("GetClientDownloadFilterFlags", Native_GetClientDownloadFilterFlag);
+    
+    return APLRes_Success;
 }
 
 public Action:Command_ShowClientDownloadFilters(client, args) {
@@ -79,11 +90,19 @@ public ConVarQuery_DownloadFilter(QueryCookie:cookie, client, ConVarQueryResult:
 
 SetClientDownloadFilterFlag(client, flags) {
     g_rgbClientDownloadFilters[client] = flags;
-    // TODO Call forward to notify.
+    
+    Call_StartForward(g_hOnDownloadFlagsSet);
+    Call_PushCell(client);
+    Call_PushCell(flags);
+    Call_Finish();
 }
 
 GetClientDownloadFilterFlag(client) {
     return g_rgbClientDownloadFilters[client];
 }
 
-// TODO Create native for GetClientDownloadFilterFlag and OnClientDownloadFilterFlagSet
+public Native_GetClientDownloadFilterFlag(Handle:hPlugin, nParams) {
+    new iClient = GetNativeCell(1);
+    
+    return GetClientDownloadFilterFlag(iClient);
+}
