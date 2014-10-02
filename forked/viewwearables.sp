@@ -9,14 +9,14 @@
 #include <sdktools>
 #include <clientprefs>
 
-#define PLUGIN_VERSION              "0.1.2"
+#define PLUGIN_VERSION              "0.2.0"
 
 public Plugin:myinfo = {
-    name = "[TF2] Hat Removal (+clientprefs)",
-    author = "Jaro 'Monkeys' Vanderheijden, nosoop",
+    name = "[TF2] View Wearables",
+    author = "nosoop",
     description = "Gives players the choice to toggle hat visibility",
     version = PLUGIN_VERSION,
-    url = "http://www.sourcemod.net/"
+    url = "http://github.com/nosoop"
 };
 
 #define CONFIG_COMMENT              ";"
@@ -68,20 +68,33 @@ public OnEntityCreated(entity, const String:sClassName[]) {
 
 /**
  * Called when a tf_wearable instance is created.
+ * Hook first to use stock wearables, then unhook if not a whitelisted item.
  */
-OnWearableCreated(iWearable, bool:bRetry = false) {
+OnWearableCreated(iWearable) {
+    // TODO Improve detection method for invalid wearable entities spawned during map changes.
+    if (iWearable < 40) {
+        return;
+    }
+
     new iItemDefinitionIndex = GetEntProp(iWearable, Prop_Send, "m_iItemDefinitionIndex");
     
-    // If the defindex is 0, the wearable isn't fully prepared yet.
-    if (iItemDefinitionIndex == 0 && !bRetry) {
-        CreateTimer(0.01, Timer_RetryOnWearableCreated, iWearable);
-    } else if (FindValueInArray(g_hItemDefsExempted, iItemDefinitionIndex) == -1) {
-        SDKHook(iWearable, SDKHook_SetTransmit, SDKHook_OnWearableTrasnmit);
+    if (SDKHookEx(iWearable, SDKHook_SetTransmit, SDKHook_OnWearableTrasnmit)
+            && iItemDefinitionIndex == 0) {
+        // If the defindex is 0, the wearable probably isn't fully prepared yet.
+        // Recheck again as soon as possible.
+        CreateTimer(0.01, Timer_RecheckOnWearableCreated, iWearable);
     }
 }
 
-public Action:Timer_RetryOnWearableCreated(Handle:hTimer, any:iWearable) {
-    OnWearableCreated(iWearable, true);
+public Action:Timer_RecheckOnWearableCreated(Handle:hTimer, any:iWearable) {
+    new iItemDefinitionIndex = GetEntProp(iWearable, Prop_Send, "m_iItemDefinitionIndex");
+    
+    // B.A.S.E. Jumper also uses a wearable with defindex 0.
+    // (defindex 0 points to TF_WEAPON_BAT, which is not a valid wearable.)
+    if (iItemDefinitionIndex == 0
+            || FindValueInArray(g_hItemDefsExempted, iItemDefinitionIndex) != -1) {
+        SDKUnhook(iWearable, SDKHook_SetTransmit, SDKHook_OnWearableTrasnmit);
+    }
     return Plugin_Handled;
 }
 
@@ -93,6 +106,10 @@ public Action:SDKHook_OnWearableTrasnmit(iEntity, iClient) {
     }
 }
 
+/**
+ * Reloads the wearable exemption list.
+ * The only reason sm_viewwearables_reload should be called is if there is a new wearable to add to the exceptions.
+ */
 public Action:Command_ReloadExemptions(client, args) {
     LoadItemExemptions();
     return Plugin_Handled;
@@ -105,7 +122,7 @@ LoadItemExemptions() {
     BuildPath(Path_SM, sItemExemptions, sizeof(sItemExemptions), WEARABLE_EXEMPTION_CONFIG);
     
     // Exemptions file -- reads each line expecting a defindex value
-    // Can contain empty lines or comments starting with the ";" character
+    // Can also contain empty lines or comments starting with the ";" character
     if (FileExists(sItemExemptions)) {
         new Handle:hItemExemptions = OpenFile(sItemExemptions, "r");
         
@@ -135,6 +152,7 @@ public OnClientCookiesCached(client) {
 }
 
 public CookieHandler_RemoveWearables(client, CookieMenuAction:action, any:info, String:buffer[], maxlen) {
+    // TODO Create custom prefab
     switch (action) {
         case CookieMenuAction_DisplayOption: {
         }
