@@ -26,7 +26,7 @@ public Plugin:myinfo = {
 	name = "SUM (Lite)",
 	author = "nosoop, original by sfPlayer",
 	description = "A fork of SUM.  Handles persistent bans exclusively with SQLite.",
-	version = "1.0.0",
+	version = "1.0.1",
 	url = "http://github.com/nosoop"
 }
 
@@ -101,7 +101,11 @@ public Action:sum_setup(client, args) {
 			return Plugin_Handled;
 		}
 
-		new Handle:dbConnection = SQL_ConnectEx(dbDrvHandle, "", "", "", "sumdb", err, sizeof(err), false, 0, 10);
+		KvJumpToKey(kvHandle, "sumdb", true);
+		KvSetString(kvHandle, "driver", "sqlite");
+		KvSetString(kvHandle, "database", "sumdb");
+		
+		new Handle:dbConnection = SQL_ConnectCustom(kvHandle, err, sizeof(err), false);
 		if (dbConnection == INVALID_HANDLE) {
 			ReplyToCommand(client, "SUM: Error: The SQLite configuration is invalid (%s)", err);
 			CloseHandle(dbDrvHandle);
@@ -121,9 +125,6 @@ public Action:sum_setup(client, args) {
 			CloseHandle(dbDrvHandle);
 		}
 
-		KvJumpToKey(kvHandle, "sumdb", true);
-		KvSetString(kvHandle, "driver", "sqlite");
-		KvSetString(kvHandle, "database", "sumdb");
 	} else {
 		ReplyToCommand(client, "SUM: Usage: sum_setup mysql <host> <database> <user> <password> [<port>] or sum_setup sqlite (local only)");
 		CloseHandle(kvHandle);
@@ -173,9 +174,7 @@ public Action:sum_admins(client, args) {
 	if (hDatabase != INVALID_HANDLE) {
 		decl String:queryStr[300];
 
-		if (databaseIdent == DBIdent_MySQL) {
-			strcopy(queryStr, sizeof(queryStr), "SELECT cl.steamid, name, admin FROM client cl LEFT JOIN clientname co USING (steamid) WHERE admin>0 AND (connectcount = 0 OR count = (SELECT MAX(count) FROM clientname WHERE clientname.steamid = co.steamid GROUP BY clientname.steamid)) GROUP BY cl.steamid ORDER BY cl.steamid ASC LIMIT 100;");
-		} else if (databaseIdent == DBIdent_SQLite) {
+		if (databaseIdent == DBIdent_SQLite) {
 			// limitation: doesn't show mostly used name
 			strcopy(queryStr, sizeof(queryStr), "SELECT cl.steamid, name, admin FROM client cl LEFT JOIN clientname cn ON (cl.steamid = cn.steamid) WHERE admin>0 GROUP BY cl.steamid ORDER BY cl.steamid ASC LIMIT 100;");
 		}
@@ -243,11 +242,10 @@ public Action:sum_banlog(client, args) {
 
 				if (StrEqual(arg_target, "creator", false)) {
 					Format(queryStr, sizeof(queryStr), queryStr, "WHERE creator = '%s' ");
-					Format(queryStr, sizeof(queryStr), queryStr, auth);
 				} else {
 					Format(queryStr, sizeof(queryStr), queryStr, "WHERE target = '%s' ");
-					Format(queryStr, sizeof(queryStr), queryStr, auth);
 				}
+				Format(queryStr, sizeof(queryStr), queryStr, auth);
 			} else {
 				Format(queryStr, sizeof(queryStr), queryStr, "WHERE target = '%s' ");
 				Format(queryStr, sizeof(queryStr), queryStr, auth);
@@ -424,16 +422,11 @@ public T_querySteamID(Handle:db, Handle:query, const String:error[], any:data) {
 		if (SQL_FetchRow(query)) {
 			new admin = SQL_FetchInt(query, 0);
 			new banneduntil = SQL_FetchInt(query, 1);
-			new connectcount = SQL_FetchInt(query, 2);
 
 			if (banneduntil > GetTime()) {
 				KickClient(client, "SUM: You are banned from this server.");
 			} else {
 				insertClientName(client, auth);
-
-				decl String:newquery[255];
-				Format(newquery, sizeof(newquery), "UPDATE client SET connectcount = '%d', lastconnect = '%d' WHERE steamid = '%s';", connectcount+1, GetTime(), auth);
-				SQL_TQuery(db, T_ignore, newquery);
 			}
 			
 			if (admin) {
@@ -459,16 +452,10 @@ insertClientName(const client, const String:auth[]) {
 		decl String:buffer[sizeof(name)*2+1];
 
 		SQL_QuoteString(hDatabase, name, buffer, sizeof(buffer));
-
-		if (databaseIdent == DBIdent_MySQL) {
+		
+		if (databaseIdent == DBIdent_SQLite) {
 			decl String:newquery[200];
-			Format(newquery, sizeof(newquery), "INSERT INTO clientname (steamid, name, count) VALUES ('%s', '%s', '1') ON DUPLICATE KEY UPDATE count = count+1;", auth, buffer);
-			SQL_TQuery(hDatabase, T_ignore, newquery);
-		} else if (databaseIdent == DBIdent_SQLite) {
-			decl String:newquery[200];
-			Format(newquery, sizeof(newquery), "INSERT OR IGNORE INTO clientname (steamid, name, count) VALUES ('%s', '%s', '0');", auth, buffer);
-			SQL_TQuery(hDatabase, T_ignore, newquery);
-			Format(newquery, sizeof(newquery), "UPDATE clientname SET count = count+1 WHERE steamid = '%s' AND name = '%s';", auth, buffer);
+			Format(newquery, sizeof(newquery), "INSERT OR IGNORE INTO clientname (steamid, name) VALUES ('%s', '%s');", auth, buffer);
 			SQL_TQuery(hDatabase, T_ignore, newquery);
 		}
 	}
