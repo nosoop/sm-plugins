@@ -9,7 +9,7 @@
 #include <sdktools>
 #include <clientprefs>
 
-#define PLUGIN_VERSION              "0.2.0"
+#define PLUGIN_VERSION              "0.3.0"
 
 public Plugin:myinfo = {
     name = "[TF2] View Wearables",
@@ -76,17 +76,14 @@ OnWearableCreated(iWearable) {
         return;
     }
 
-    new iItemDefinitionIndex = GetEntProp(iWearable, Prop_Send, "m_iItemDefinitionIndex");
-    
-    if (SDKHookEx(iWearable, SDKHook_SetTransmit, SDKHook_OnWearableTrasnmit)
-            && iItemDefinitionIndex == 0) {
+    if (SDKHookEx(iWearable, SDKHook_SetTransmit, SDKHook_OnWearableTrasnmit)) {
         // If the defindex is 0, the wearable probably isn't fully prepared yet.
         // Recheck again as soon as possible.
-        CreateTimer(0.01, Timer_RecheckOnWearableCreated, iWearable);
+        SDKHook(iWearable, SDKHook_Spawn, SDKHook_OnWearableSpawned);
     }
 }
 
-public Action:Timer_RecheckOnWearableCreated(Handle:hTimer, any:iWearable) {
+public Action:SDKHook_OnWearableSpawned(iWearable) {
     new iItemDefinitionIndex = GetEntProp(iWearable, Prop_Send, "m_iItemDefinitionIndex");
     
     // B.A.S.E. Jumper also uses a wearable with defindex 0.
@@ -95,7 +92,7 @@ public Action:Timer_RecheckOnWearableCreated(Handle:hTimer, any:iWearable) {
             || FindValueInArray(g_hItemDefsExempted, iItemDefinitionIndex) != -1) {
         SDKUnhook(iWearable, SDKHook_SetTransmit, SDKHook_OnWearableTrasnmit);
     }
-    return Plugin_Handled;
+    return Plugin_Continue;
 }
 
 public Action:SDKHook_OnWearableTrasnmit(iEntity, iClient) {
@@ -152,7 +149,7 @@ public OnClientCookiesCached(client) {
 }
 
 public CookieHandler_RemoveWearables(client, CookieMenuAction:action, any:info, String:buffer[], maxlen) {
-    // TODO Create custom prefab
+    // TODO Create custom prefab?
     switch (action) {
         case CookieMenuAction_DisplayOption: {
         }
