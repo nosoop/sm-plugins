@@ -8,7 +8,7 @@
 #undef REQUIRE_PLUGIN                       // Support late loads.
 #include <roundendsongs>
 
-#define PLUGIN_VERSION          "0.3.1"     // Plugin version.
+#define PLUGIN_VERSION          "0.3.2"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "Round End Music (SQLite)",
@@ -24,7 +24,7 @@ new Handle:g_hCDatabaseName = INVALID_HANDLE,           String:g_sDatabaseName[3
 
 // SQLite snippet to generate a number between 0 to 1 for each query.
 // Source:  http://stackoverflow.com/a/23785593
-new String:g_sRandomFunction[] = "(random() / 18446744073709551616 + 0.5)";
+new String:g_sRandomFunction[] = "random() / 18446744073709551616 + 0.5";
 
 public OnPluginStart() {
 
@@ -58,7 +58,7 @@ public Action:REM_OnSongsRequested(nSongs) {
     // Create sorter function.
     decl String:sWeightFunction[64];
     Format(sWeightFunction, sizeof(sWeightFunction),
-            "((playcount + %d) * %s)", GetHighestPlayCount(hDatabase), g_sRandomFunction);
+            "((playcount + %d) * (%s))", RoundFloat(GetHighestPlayCount(hDatabase) * 0.25), g_sRandomFunction);
     
     decl String:sSongQuery[256];
     Format(sSongQuery, sizeof(sSongQuery),
