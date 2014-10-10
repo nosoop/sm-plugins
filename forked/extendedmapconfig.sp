@@ -24,19 +24,24 @@
  */
 
 #pragma semicolon 1
-#include <sourcemod>
 
-#define VERSION                      "1.0.1"
+#include <sourcemod>
+#include <sdktools>
+
+#define VERSION                      "1.0.2"
 
 #define PATH_PREFIX_ACTUAL           "cfg/"
 #define PATH_PREFIX_VISIBLE          "mapconfig/"
-#define PATH_PREFIX_VISIBLE_GENERAL  "mapconfig/general/"
+#define PATH_PREFIX_VISIBLE_GENERAL  "mapconfig/"
 #define PATH_PREFIX_VISIBLE_GAMETYPE "mapconfig/gametype/"
 #define PATH_PREFIX_VISIBLE_MAP      "mapconfig/maps/"
 
-#define TYPE_GENERAL                 0
-#define TYPE_MAP                     1
-#define TYPE_GAMETYPE                2
+#define PATH_MAPCONFIG_DIR              "mapconfig"
+#define PATH_MAPCONFIG_DIR_SLASH        "mapconfig/"
+
+#define TYPE_GENERAL                    0
+#define TYPE_MAP                        1
+#define TYPE_GAMETYPE                   2
 
 public Plugin:myinfo = {
 	name        = "Extended mapconfig package",
@@ -47,77 +52,67 @@ public Plugin:myinfo = {
 };
 
 public OnPluginStart() {
-	CreateConVar("extendedmapconfig_version", VERSION, "Current version of the extended mapconfig plugin", FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_DONTRECORD);
+	CreateConVar("emc_version", VERSION, "Current version of the extended mapconfig plugin", FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_DONTRECORD);
 	createConfigFiles();
 }
 
 public OnAutoConfigsBuffered() {
-	new String:configFilename[PLATFORM_MAX_PATH];
-	new String:name[PLATFORM_MAX_PATH];
-	// Execute general config
-	name = "all";
-	getConfigFilename(configFilename, sizeof(configFilename), name, TYPE_GENERAL);
-	PrintToServer("Loading mapconfig: general configfile (%s.cfg).", name);
-	ServerCommand("exec \"%s\"", configFilename);
-	// Execute gametype config
-	GetCurrentMap(name, sizeof(name));
-	if (SplitString(name, "_", name, sizeof(name)) != -1) {
-		getConfigFilename(configFilename, sizeof(configFilename), name, TYPE_GAMETYPE);
-		PrintToServer("Loading mapconfig: gametype configfile (%s.cfg).", name);
-		ServerCommand("exec \"%s\"", configFilename);
-	}
-	// Execute map's config
-	GetCurrentMap(name, sizeof(name));
-	getConfigFilename(configFilename, sizeof(configFilename), name, TYPE_MAP);
-	PrintToServer("Loading mapconfig: mapspecific configfile (%s.cfg).", name);
-	ServerCommand("exec \"%s\"", configFilename);
+    decl String:sMapName[128];
+    GetCurrentMap(sMapName, sizeof(sMapName));
+    
+    ExecuteGlobalConfig();
+    ExecuteGameTypeConfig(sMapName);
+    ExecuteMapSpecificConfig(sMapName);
 }
 
-createConfigFiles() {
-	new String:game[64];
-	new String:name[PLATFORM_MAX_PATH];
-	// Fetch the current game/mod
-	GetGameFolderName(game, sizeof(game));
-	// Create the directory structure (if it doesnt exist already)
-	createConfigDir(PATH_PREFIX_VISIBLE,           PATH_PREFIX_ACTUAL);
-	createConfigDir(PATH_PREFIX_VISIBLE,           PATH_PREFIX_ACTUAL);
-	createConfigDir(PATH_PREFIX_VISIBLE_GENERAL,   PATH_PREFIX_ACTUAL);
-	createConfigDir(PATH_PREFIX_VISIBLE_GAMETYPE,  PATH_PREFIX_ACTUAL);
-	createConfigDir(PATH_PREFIX_VISIBLE_MAP,       PATH_PREFIX_ACTUAL);
-	// Create general config
-	createConfigFile("all",     TYPE_GENERAL,  "All maps");
-	// For Team Fortress 2
-	if (strcmp(game, "tf", false) == 0) {
-		createConfigFile("cp",    TYPE_GAMETYPE, "Control-point maps");
-		createConfigFile("ctf",   TYPE_GAMETYPE, "Capture-the-Flag maps");
-		createConfigFile("pl",    TYPE_GAMETYPE, "Payload maps");
-		createConfigFile("arena", TYPE_GAMETYPE, "Arena-style maps");
-	// For Counter-strike and Counter-strike:Source
-	} else if (strcmp(game, "cstrike", false) == 0) {
-		createConfigFile("cs",    TYPE_GAMETYPE, "Hostage maps");
-		createConfigFile("de",    TYPE_GAMETYPE, "Defuse maps");
-		createConfigFile("as",    TYPE_GAMETYPE, "Assasination maps");
-		createConfigFile("es",    TYPE_GAMETYPE, "Escape maps");
-	}
-	new Handle:adtMaps = CreateArray(16, 0);
-	new serial = -1;
-	// Fetch dynamic array of all existing maps on the server
-	ReadMapList(adtMaps, serial, "allexistingmaps__", MAPLIST_FLAG_MAPSFOLDER|MAPLIST_FLAG_NO_DEFAULT);
-	new mapcount = GetArraySize(adtMaps);
-	// Create a cfgfile for each one
-	if (mapcount > 0) for (new i = 0; i < mapcount; i++) {
-		GetArrayString(adtMaps, i, name, sizeof(name));
-		createConfigFile(name, TYPE_MAP, name);
-	}
+ExecuteGlobalConfig() {
+    ExecuteConfig("%s/%s.cfg", PATH_MAPCONFIG_DIR, "all");
 }
 
-// Determine the full path to a config file.
-getConfigFilename(String:buffer[], const maxlen, const String:filename[], const type=TYPE_MAP, const bool:actualPath=false) {
-	Format(
-		buffer, maxlen, "%s%s%s.cfg", (actualPath ? PATH_PREFIX_ACTUAL : ""), (
-		type == TYPE_GENERAL ? PATH_PREFIX_VISIBLE_GENERAL : (type == TYPE_GAMETYPE ? PATH_PREFIX_VISIBLE_GAMETYPE : PATH_PREFIX_VISIBLE_MAP)
-		), filename
-	);
+ExecuteGameTypeConfig(const String:sMapName[]) {
+    decl String:sMapDir[PLATFORM_MAX_PATH], String:sGamePrefix[16];
+    Format(sMapDir, sizeof(sMapDir), "%s/gametype", PATH_MAPCONFIG_DIR);
+    
+    if (SplitString(sMapName, "_", sGamePrefix, sizeof(sGamePrefix)) != -1) {
+        ExecuteConfig("%s/%s.cfg", sMapDir, sGamePrefix);
+        
+        if (StrEqual(sGamePrefix, "cp")) {
+            ExecuteExtendedCPConfig();
+        }
+    }
+}
+
+ExecuteExtendedCPConfig() {
+    // Source:
+    // https://forums.alliedmods.net/showthread.php?p=913024
+    decl String:sMapDir[PLATFORM_MAX_PATH];
+    Format(sMapDir, sizeof(sMapDir), "%s/gametype", PATH_MAPCONFIG_DIR);
+
+    new iTeam, iEnt = -1;
+    while ((iEnt = FindEntityByClassname(iEnt, "team_control_point")) != -1) {
+        iTeam = GetEntProp(iEnt, Prop_Send, "m_iTeamNum");
+        // If there is a blu CP or a neutral CP, then it's not an attack/defend map
+        if (iTeam != 2) {
+            ExecuteConfig("%s/cp_push.cfg", sMapDir);
+            return;
+        }
+    }
+    ExecuteConfig("%s/cp_ad.cfg", sMapDir);
+}
+
+ExecuteMapSpecificConfig(const String:sMapName[]) {
+    ExecuteConfig("%s/maps/%s.cfg", PATH_MAPCONFIG_DIR, sMapName);
+}
+
+ExecuteConfig(const String:sConfigFormat[], any:...) {
+    decl String:sConfigFullPath[PLATFORM_MAX_PATH], String:sConfigPath[PLATFORM_MAX_PATH];
+    VFormat(sConfigPath, sizeof(sConfigPath), sConfigFormat, 2);
+    Format(sConfigFullPath, sizeof(sConfigFullPath), "cfg/%s", sConfigPath);
+    
+    if (FileExists(sConfigFullPath, true)) {
+        PrintToServer("[emc] Executing config file %s ...", sConfigPath);
+        ServerCommand("exec %s", sConfigPath);
+    }
 }
 
 createConfigDir(const String:filename[], const String:prefix[]="") {
@@ -131,20 +126,72 @@ createConfigDir(const String:filename[], const String:prefix[]="") {
 	);
 }
 
-createConfigFile(const String:filename[], type=TYPE_MAP, const String:label[]="") {
-	new String:configFilename[PLATFORM_MAX_PATH];
-	new String:configLabel[128];
-	new Handle:fileHandle = INVALID_HANDLE;
-	getConfigFilename(configFilename, sizeof(configFilename), filename, type, true);
-	// Check if config exists
-	if (FileExists(configFilename)) return;
-	// If it doesnt, create it
-	fileHandle = OpenFile(configFilename, "w+");
-	// Determine content
-	if (strlen(label) > 0) strcopy(configLabel, sizeof(configLabel), label);
-	else                   strcopy(configLabel, sizeof(configLabel), configFilename);
-	if (fileHandle != INVALID_HANDLE) {
-		WriteFileLine(fileHandle, "// Configfile for: %s", configLabel);
-		CloseHandle(fileHandle);
+GenerateGameTypeConfig(const String:sGamePrefix[], const String:sGameDescription[]) {
+    new Handle:hFile = INVALID_HANDLE;
+    decl String:sConfigPath[PLATFORM_MAX_PATH];
+    
+    Format(sConfigPath, sizeof(sConfigPath), "cfg/%s/gametype/%s.cfg", PATH_MAPCONFIG_DIR, sGamePrefix);
+    
+    if (FileExists(sConfigPath)) {
+        return;
+    }
+	
+    hFile = OpenFile(sConfigPath, "w+");
+    if (hFile != INVALID_HANDLE) {
+        WriteFileLine(hFile, "// Configuration for %s", sGameDescription);
+        CloseHandle(hFile);
+    }
+}
+
+createConfigFiles() {
+	new String:game[64];
+	// Fetch the current game/mod
+	GetGameFolderName(game, sizeof(game));
+	// Create the directory structure (if it doesnt exist already)
+	createConfigDir(PATH_PREFIX_VISIBLE,           PATH_PREFIX_ACTUAL);
+	createConfigDir(PATH_PREFIX_VISIBLE_GENERAL,   PATH_PREFIX_ACTUAL);
+	createConfigDir(PATH_PREFIX_VISIBLE_GAMETYPE,  PATH_PREFIX_ACTUAL);
+	createConfigDir(PATH_PREFIX_VISIBLE_MAP,       PATH_PREFIX_ACTUAL);
+	// Create general config
+	createConfigFile("all",     TYPE_GENERAL,  "All maps");
+	// For Team Fortress 2
+	if (strcmp(game, "tf", false) == 0) {
+        GenerateGameTypeConfig("cp", "Control-point maps");
+        GenerateGameTypeConfig("cp_push", "Control-point maps (Push-style)");
+        GenerateGameTypeConfig("cp_ad", "Control-point maps (Attack / Defend)");
+        GenerateGameTypeConfig("ctf", "Capture-the-Flag maps");
+        GenerateGameTypeConfig("pl", "Payload maps");
+        GenerateGameTypeConfig("arena", "Arena-style maps");
+	} else if (strcmp(game, "cstrike", false) == 0) {
+        // For Counter-strike and Counter-strike:Source
+		GenerateGameTypeConfig("cs", "Hostage maps");
+		GenerateGameTypeConfig("de", "Defuse maps");
+		GenerateGameTypeConfig("as", "Assasination maps");
+		GenerateGameTypeConfig("es", "Escape maps");
 	}
+    
+    // Removed automatic map config generation.
+}
+
+createConfigFile(const String:filename[], type=TYPE_MAP, const String:label[]="") {
+    decl String:configFilename[PLATFORM_MAX_PATH];
+    new Handle:fileHandle = INVALID_HANDLE;
+    
+    Format(
+        configFilename, sizeof(configFilename), "%s%s%s.cfg", PATH_PREFIX_ACTUAL, (
+        type == TYPE_GENERAL ? PATH_PREFIX_VISIBLE_GENERAL : (type == TYPE_GAMETYPE ? PATH_PREFIX_VISIBLE_GAMETYPE : PATH_PREFIX_VISIBLE_MAP)
+        ), filename
+    );
+    
+    // Check if config exists
+    if (FileExists(configFilename))
+        return;
+    
+    // If it doesnt, create it
+    fileHandle = OpenFile(configFilename, "w+");
+    
+    if (fileHandle != INVALID_HANDLE) {
+        WriteFileLine(fileHandle, "// Configfile for: %s", (strlen(label) > 0) ? label : configFilename);
+        CloseHandle(fileHandle);
+    }
 }
