@@ -18,7 +18,7 @@
 #include <tf2_stocks>
 #include <propify>
 
-#define PLUGIN_VERSION          "2.4.0"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "2.5.0"     // Plugin version.  Am I doing semantic versioning right?
 
                                             // In humiliation...
 #define UNPROP_DMG_NEVER        0           // Props are never lost from taking damage.
@@ -44,8 +44,8 @@ new Handle:g_hCPluginEnabled = INVALID_HANDLE,      bool:g_bPluginEnabled,      
     Handle:g_hCDmgUnprops = INVALID_HANDLE,         g_iDmgUnprops,              // sm_propbonus_damageunprops
     Handle:g_hCHumiliationRespawn = INVALID_HANDLE, bool:g_bHumiliationRespawn; // sm_propbonus_forcespawn
 
-// Check plugin-controlled glow state.
-new bool:g_bIsPlayerGlowing[MAXPLAYERS + 1];
+new bool:g_bIsPlayerGlowing[MAXPLAYERS + 1],        // Check plugin-controlled glow state.
+    bool:g_bIsPlayerTargeted[MAXPLAYERS+1];         // ... and sentry target state.
 
 // Check if a player is part of the admin group to be propped.
 new bool:g_bIsPlayerAdmin[MAXPLAYERS + 1];
@@ -145,6 +145,10 @@ HookPropBonusRoundPluginEvents(bool:bHook) {
     }
 }
 
+public OnClientDisconnect(client) {
+    g_bIsPlayerTargeted[client] = false;
+}
+
 public OnClientPostAdminCheck(client) {
     g_bIsPlayerAdmin[client] = IsValidAdmin(client, g_sCharAdminFlag);
 }
@@ -172,7 +176,7 @@ public Hook_PostPlayerHurt(Handle:event, const String:name[], bool:dontBroadcast
         return;
     }
     
-    if (attacker > 0 && attacker == client && g_iDmgUnprops >= UNPROP_DMG_PLAYER) {
+    if (attacker > 0 && attacker != client && g_iDmgUnprops >= UNPROP_DMG_PLAYER) {
         SetPlayerGlow(client, true);
         PrintToChat(client, "Another player attacked you and made you visible; run!");
     } else if (g_iDmgUnprops >= UNPROP_DMG_ANY) {
@@ -198,7 +202,7 @@ public Action:Timer_EquipProps(Handle:timer) {
     for (new x = 1; x <= MaxClients; x++) {
         new bool:bClientJustRespawned;
         
-        if(!IsClientInGame(x) || IsFakeClient(x)) {
+        if(!IsClientInGame(x) || GetClientTeam(x) < 2) {
             continue;
         }
         
@@ -240,6 +244,11 @@ public Action:Timer_EquipProps(Handle:timer) {
             
             Propify_PropPlayer(x, _, bClientJustRespawned);
             
+            if (GetEntityFlags(x) & FL_NOTARGET != FL_NOTARGET && !g_bIsPlayerTargeted[x]) {
+                SetEntityFlags(x, GetEntityFlags(x) | FL_NOTARGET);
+                g_bIsPlayerTargeted[x] = true;
+            }
+            
             if (g_iWinningTeam != TFTeam_Unassigned) {
                 PrintCenterText(x, "You've been turned into a prop!  Blend in!");
             } else {
@@ -275,6 +284,10 @@ public Hook_PostRoundStart(Handle:event, const String:name[], bool:dontBroadcast
         if (IsClientInGame(i) && g_bIsPlayerGlowing[i]) {
             SetEntProp(i, Prop_Send, "m_bGlowEnabled", 0, 1);
             g_bIsPlayerGlowing[i] = false;
+        }
+        if (g_bIsPlayerTargeted[i]) {
+            SetEntityFlags(i, GetEntityFlags(i) & ~FL_NOTARGET);
+            g_bIsPlayerTargeted[i] = false;
         }
     }
 }
