@@ -29,7 +29,7 @@
 #include <sdktools>
 #include <tf2>
 
-#define VERSION                      "1.0.3"
+#define VERSION                      "1.1.0"
 
 public Plugin:myinfo = {
 	name        = "Extended Map Configs",
@@ -100,7 +100,30 @@ ExecuteExtendedCPConfig() {
 }
 
 ExecuteMapSpecificConfig(const String:sMapName[]) {
-    ExecuteConfig(ConfigPath_GameType, "%s.cfg", sMapName);
+    ExecuteConfig(ConfigPath_Maps, "%s.cfg", sMapName);
+}
+
+/**
+ * Executes configurations for a map file, increasing in specifity.
+ * (e.g., pl_pier_.cfg executes before pl_pier_b11_.cfg before pl_pier_b11_fix.cfg)
+ */
+ExecuteMapPrefixConfigs(const String:sMapName[]) {
+    new nMapNamePortions;
+    
+    // [string][stringlength]
+    new String:sMapNamePortions[16][48];
+    decl String:sMapNameBuffer[PLATFORM_MAX_PATH];
+    nMapNamePortions = ExplodeString(sMapName, "_", sMapNamePortions, sizeof(sMapNamePortions), sizeof(sMapNamePortions[]));
+    
+    // Underscores are appended?
+    for (new i = 0; i < nMapNamePortions; i++) {
+        StrCat(sMapNameBuffer, sizeof(sMapNameBuffer), sMapNamePortions[i]);
+        if (i < nMapNamePortions - 1) {
+            StrCat(sMapNameBuffer, sizeof(sMapNameBuffer), "_");
+        }
+        
+        ExecuteConfig(ConfigPath_Maps, "%s.cfg", sMapNameBuffer);
+    }
 }
 
 ExecuteConfig(ConfigPathType:type, const String:sConfigFormat[], any:...) {
