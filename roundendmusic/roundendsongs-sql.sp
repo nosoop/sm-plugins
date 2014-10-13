@@ -8,7 +8,7 @@
 #undef REQUIRE_PLUGIN                       // Support late loads.
 #include <roundendsongs>
 
-#define PLUGIN_VERSION          "0.1.0"     // Plugin version.
+#define PLUGIN_VERSION          "0.1.1"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "Round End Music (SQL)",
@@ -17,6 +17,8 @@ public Plugin:myinfo = {
     version = PLUGIN_VERSION,
     url = "http://github.com/nosoop"
 }
+
+#define SQL_QUERY_LENGTH        1024
 
 new Handle:g_hCDatabaseName = INVALID_HANDLE,           String:g_sDatabaseName[32],
     Handle:g_hCTableName = INVALID_HANDLE,              String:g_sTableName[32],
@@ -54,11 +56,11 @@ public Action:REM_OnSongsRequested(nSongs) {
     new Handle:hDatabase = GetSongDatabaseHandle();
     
     // Create sorter function.
-    decl String:sWeightFunction[64];
+    decl String:sWeightFunction[SQL_QUERY_LENGTH];
     Format(sWeightFunction, sizeof(sWeightFunction),
-            "((playcount + %d) * %s)", GetHighestPlayCount(hDatabase), g_sRandomFunction);
+            "((playcount + %d) * %s)", RoundFloat(float(GetHighestPlayCount(hDatabase)) * 0.25), g_sRandomFunction);
     
-    decl String:sSongQuery[256];
+    decl String:sSongQuery[SQL_QUERY_LENGTH];
     Format(sSongQuery, sizeof(sSongQuery),
             "SELECT artist,track,filepath,file_id FROM `%s` WHERE enabled = 1 ORDER BY %s LIMIT %d",
             g_sTableName, sWeightFunction, nSongs);
@@ -84,7 +86,7 @@ public Action:REM_OnSongsRequested(nSongs) {
     
     // Increment playcounts for added songs.
     for (new i = 0; i < nSongsAdded; i++) {
-        decl String:sUpdateQuery[255];
+        decl String:sUpdateQuery[SQL_QUERY_LENGTH];
         Format(sUpdateQuery, sizeof(sUpdateQuery),
                 "UPDATE `%s` SET playcount=playcount+1 WHERE file_id = %d",
                 g_sTableName, songIds[i]);
@@ -95,7 +97,7 @@ public Action:REM_OnSongsRequested(nSongs) {
 }
 
 GetHighestPlayCount(Handle:hDatabase) {
-    decl String:sPlayCountQuery[64];
+    decl String:sPlayCountQuery[SQL_QUERY_LENGTH];
     Format(sPlayCountQuery, sizeof(sPlayCountQuery),
             "SELECT MAX(playcount) FROM `%s` WHERE enabled=1",
             g_sTableName);
