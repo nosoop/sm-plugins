@@ -8,7 +8,7 @@
 #include <morecolors>
 #include <clientprefs>
 
-#define PLUGIN_VERSION          "0.1.2"     // Plugin version.
+#define PLUGIN_VERSION          "0.1.3"     // Plugin version.
 
 #define ADVERTISEMENT_LENGTH    255
 #define ADVERTISEMENT_CONFIG    "data/quickads.txt"
@@ -31,7 +31,7 @@ new Handle:g_hTimerAdvertisement = INVALID_HANDLE,
     g_iTimeLastAdvertisementPlay;
 
 // Convars.
-new Handle:g_hCAdvertisementInterval = INVALID_HANDLE,  Float:g_fAdvertisementInterval;
+new Handle:g_hCAdvertisementInterval = INVALID_HANDLE;
 
 // Clientprefs support to disable advertisements.
 new Handle:g_hAdvertisementCookie = INVALID_HANDLE,     bool:g_bClientSeesAdvertisements[MAXPLAYERS+1];
@@ -42,11 +42,11 @@ public OnPluginStart() {
     g_hCAdvertisementInterval = CreateConVar(
             "sm_quickads_interval", "60.0", "Amount of time between advertisements.",
             FCVAR_PLUGIN|FCVAR_SPONLY, true, 1.0);
-    g_fAdvertisementInterval = GetConVarFloat(g_hCAdvertisementInterval);
+	HookConVarChange(g_hCAdvertisementInterval, ConVarChanged_AdvertisementInterval);
     
-    g_iTimeToNextAdvertisement = RoundFloat(g_fAdvertisementInterval);
-    
-    AutoExecConfig(true, "plugin.quickads");
+    AutoExecConfig(true);
+	
+	g_iTimeToNextAdvertisement = RoundFloat(GetConVarFloat(g_hCAdvertisementInterval));
     
     g_hAdvertisementCookie = RegClientCookie("QuickAds", "Opt-out of text advertisements.", CookieAccess_Protected);
     SetCookiePrefabMenu(g_hAdvertisementCookie, CookieMenu_OnOff_Int, "Text Advertisements", CookieHandler_Advertisements);
@@ -56,7 +56,7 @@ public OnPluginStart() {
             continue;
         }
         OnClientCookiesCached(i);
-    }
+    }	
 }
 
 public OnMapStart() {
@@ -87,13 +87,13 @@ public OnClientDisconnect_Post(client) {
             g_hTimerAdvertisement = INVALID_HANDLE;
         }
         
-        g_iTimeToNextAdvertisement = RoundFloat(g_fAdvertisementInterval) - (RoundFloat(GetTickedTime()) - g_iTimeLastAdvertisementPlay);
+        g_iTimeToNextAdvertisement = RoundFloat(GetConVarFloat(g_hCAdvertisementInterval)) - (RoundFloat(GetTickedTime()) - g_iTimeLastAdvertisementPlay);
         g_iTimeToNextAdvertisement = g_iTimeToNextAdvertisement < 0 ? 0 : g_iTimeToNextAdvertisement;
     }
 }
 
 public Action:Timer_FirstAdvertisement(Handle:timer, any:thing) {
-    g_hTimerAdvertisement = CreateTimer(g_fAdvertisementInterval, Timer_Advertisement, _, TIMER_REPEAT);
+    g_hTimerAdvertisement = CreateTimer(GetConVarFloat(g_hCAdvertisementInterval), Timer_Advertisement, _, TIMER_REPEAT);
     TriggerTimer(g_hTimerAdvertisement);
 }
 
@@ -193,4 +193,9 @@ public CookieHandler_Advertisements(client, CookieMenuAction:action, any:info, S
             OnClientCookiesCached(client);
         }
     }
+}
+
+public ConVarChanged_AdvertisementInterval(Handle:hCvar, const String:oldValue[], const String:newValue[]) {
+	KillTimer(g_hTimerAdvertisement);
+	g_hTimerAdvertisement = CreateTimer(GetConVarFloat(g_hCAdvertisementInterval), Timer_Advertisement, _, TIMER_REPEAT);
 }
