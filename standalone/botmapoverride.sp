@@ -6,8 +6,9 @@
 
 #include <sourcemod>
 #include <mapchooser>
+#include <tf2>
 
-#define PLUGIN_VERSION          "1.0.2"     // Plugin version.
+#define PLUGIN_VERSION          "1.1.0"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Bot-only Map Override",
@@ -20,13 +21,57 @@ public Plugin:myinfo = {
 #define MAP_NAME_LENGTH         96
 
 public OnPluginStart() {
+    LoadTranslations("mapchooser.phrases");
     // TODO Check playercount on disconnect to see if we need to change maps?
+    
+    RegAdminCmd("sm_setnextbotmap", AdminCmd_SetNextBotMap, ADMFLAG_CHANGEMAP, "Changes the next map to a bot-compatible map.");
     
     // Event fires when the post-map scoreboard shows.
     HookEvent("teamplay_game_over", Hook_OnGameOver);
+    HookEvent("player_disconnect", Hook_OnPlayerDisconnect);
 }
 
-bool:SetNextBotMap() {
+public OnMapStart() {
+    decl String:sCurrentMap[MAP_NAME_LENGTH];
+    GetCurrentMap(sCurrentMap, sizeof(sCurrentMap));
+    if (GetLivePlayerCount() == 0 && (!MapIsNotCustomExcluded(sCurrentMap) || !MapHasNavigationMesh(sCurrentMap))) {
+        PrintToServer("No players detected.  Changing map in 1.5 minutes...");
+        CreateTimer(90.0, Timer_ChangeMap, _, TIMER_FLAG_NO_MAPCHANGE);
+    }
+}
+
+public Action:AdminCmd_SetNextBotMap(iClient, nArgs) {
+    if (SetNextBotMap()) {
+        decl String:sNextMap[MAP_NAME_LENGTH];
+        GetNextMap(sNextMap, MAP_NAME_LENGTH);
+        
+        ShowActivity(iClient, "%t", "Changed Next Map", sNextMap);
+        LogAction(iClient, -1, "\"%L\" changed nextmap to \"%s\"", iClient, sNextMap);
+    }
+    return Plugin_Handled;
+}
+
+public Hook_OnPlayerDisconnect(Handle:hEvent, const String:name[], bool:dontBroadcast) {
+    new bool:bBot = GetEventBool(hEvent, "bot");
+    
+    if (!bBot && GetLivePlayerCount() == 0) {
+        decl String:sCurrentMap[MAP_NAME_LENGTH];
+        GetCurrentMap(sCurrentMap, sizeof(sCurrentMap));
+        if (!MapIsNotCustomExcluded(sCurrentMap) || !MapHasNavigationMesh(sCurrentMap)) {
+            PrintToServer("No players detected.  Changing map in 1.5 minutes...");
+            CreateTimer(90.0, Timer_ChangeMap, _, TIMER_FLAG_NO_MAPCHANGE);
+        }
+    }
+}
+
+public Action:Timer_ChangeMap(Handle:hTimer) {
+    if (GetLivePlayerCount() == 0) {
+        SetNextBotMap(true);
+    }
+    return Plugin_Handled;
+}
+
+bool:SetNextBotMap(bool:bChangeNow = false) {
     new bool:bSuccess;
     new String:sCurrentMap[MAP_NAME_LENGTH];
     new Handle:hMapList = CreateArray(MAP_NAME_LENGTH);
@@ -71,7 +116,9 @@ bool:SetNextBotMap() {
             GetArrayString(hValidPreviousMaps, GetRandomInt(0, GetArraySize(hValidPreviousMaps) - 1), sNextMapOverride, MAP_NAME_LENGTH);
         }
         
-        if (SetNextMap(sNextMapOverride)) {
+        if (bChangeNow) {
+            ForceChangeLevel(sNextMapOverride, "No active players -- changed to a bot-playable map."); 
+        } else if (SetNextMap(sNextMapOverride)) {
             PrintToServer("[botchangemap] No active players.  Changed next map to %s", sNextMapOverride);
             bSuccess = true;
         }
@@ -142,7 +189,7 @@ bool:MapHasNavigationMesh(const String:sMapName[]) {
 _:GetLivePlayerCount() {
     new nPlayers;
     for (new i = MaxClients; i > 0; --i) {
-        if (IsClientInGame(i) && !IsFakeClient(i)) {
+        if (IsClientInGame(i) && !IsFakeClient(i) && TFTeam:GetClientTeam(i) != TFTeam_Spectator) {
             nPlayers++;
         }
     }
