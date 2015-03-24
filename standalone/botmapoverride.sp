@@ -8,7 +8,7 @@
 #include <mapchooser>
 #include <tf2>
 
-#define PLUGIN_VERSION          "1.1.0"     // Plugin version.
+#define PLUGIN_VERSION          "1.1.1"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Bot-only Map Override",
@@ -54,7 +54,8 @@ public Action:AdminCmd_SetNextBotMap(iClient, nArgs) {
 public Hook_OnPlayerDisconnect(Handle:hEvent, const String:name[], bool:dontBroadcast) {
     new bool:bBot = GetEventBool(hEvent, "bot");
     
-    if (!bBot && GetLivePlayerCount() == 0) {
+	// Currently disconnecting player is included in live player count
+    if (!bBot && GetLivePlayerCount() - 1 == 0) {
         decl String:sCurrentMap[MAP_NAME_LENGTH];
         GetCurrentMap(sCurrentMap, sizeof(sCurrentMap));
         if (!MapIsNotCustomExcluded(sCurrentMap) || !MapHasNavigationMesh(sCurrentMap)) {
