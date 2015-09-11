@@ -34,6 +34,10 @@ public OnPluginStart() {
 public OnMapStart() {
     decl String:sCurrentMap[MAP_NAME_LENGTH];
     GetCurrentMap(sCurrentMap, sizeof(sCurrentMap));
+	if (GetLivePlayerCount() == 1 && (StrContains(sCurrentMap, "arena") == 0)) {
+		PrintToServer("Not enough players to run Arena Mode.  Changing map in 1.5 minutes...");
+        CreateTimer(90.0, Timer_ChangeMap, _, TIMER_FLAG_NO_MAPCHANGE);
+	}
     if (GetLivePlayerCount() == 0 && (!MapIsNotCustomExcluded(sCurrentMap) || !MapHasNavigationMesh(sCurrentMap))) {
         PrintToServer("No players detected.  Changing map in 1.5 minutes...");
         CreateTimer(90.0, Timer_ChangeMap, _, TIMER_FLAG_NO_MAPCHANGE);
