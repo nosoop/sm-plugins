@@ -38,6 +38,7 @@ CreateTextLogFile(handleIndex, const String:sLogName[]) {
         String:sDateTime[64];
     
     FormatTime(sDateTime, sizeof(sDateTime), "%Y%m%d-%H%M%S");
+	
     Format(sLogFileName, sizeof(sLogFileName), "/logs/chat-%s-%s.log", sDateTime, sLogName);
     BuildPath(Path_SM, sLogFullName, PLATFORM_MAX_PATH, sLogFileName);
     
@@ -67,8 +68,10 @@ TextLogToFile(handleIndex, const String:sMessage[]) {
  * Map change -- close existing log file on handle 0 and open a new one.
  */
 public OnMapStart() {
-    new String:sMap[48], String:sMessage[512];
+    new String:sMap[64], String:sMessage[512];
     GetCurrentMap(sMap, sizeof(sMap));
+	
+	TrimWorkshopMapName(sMap, sizeof(sMap));
     
     CreateTextLogFile(0, sMap);
     
@@ -107,4 +110,14 @@ public OnClientPostAdminCheck(client) {
     new String:sJoinMessage[512];
     Format(sJoinMessage, sizeof(sJoinMessage), "Player %N (%s) connected.", client, steamID);
     TextLogToFile(0, sJoinMessage);
+}
+
+stock TrimWorkshopMapName(String:map[], size) {
+	if (StrContains(map, "workshop/", true) == 0) {
+		// Trim off workshop directory
+		strcopy(map, size, map[9]);
+		
+		// Strip off the map ID onwards
+		strcopy(map, StrContains(map, ".ugc") + 1, map);
+	}
 }

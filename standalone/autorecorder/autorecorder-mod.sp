@@ -21,7 +21,7 @@
 #pragma semicolon 1
 #include <sourcemod>
 
-#define PLUGIN_VERSION "1.2.1"
+#define PLUGIN_VERSION "1.3.0"
 
 new Handle:g_hTvEnabled = INVALID_HANDLE;
 new Handle:g_hAutoRecord = INVALID_HANDLE;
@@ -162,11 +162,13 @@ public CheckStatus() {
 
 public StartRecord() {
     if(GetConVarBool(g_hTvEnabled) && !g_bIsRecording) {
-        decl String:sPath[PLATFORM_MAX_PATH], String:sTime[16], String:sMap[32];
+        decl String:sPath[PLATFORM_MAX_PATH], String:sTime[16], String:sMap[96];
         
         GetConVarString(g_hDemoPath, sPath, sizeof(sPath));
         FormatTime(sTime, sizeof(sTime), "%Y%m%d-%H%M%S", GetTime());
         GetCurrentMap(sMap, sizeof(sMap));
+		
+		TrimWorkshopMapName(sMap, sizeof(sMap));
         
         ServerCommand("tv_record \"%s/auto-%s-%s\"", sPath, sTime, sMap);
         g_bIsRecording = true;
@@ -217,4 +219,14 @@ GetLivePlayerCount() {
         }
     }
     return nPlayers;
+}
+
+stock TrimWorkshopMapName(String:map[], size) {
+	if (StrContains(map, "workshop/", true) == 0) {
+		// Trim off workshop directory
+		strcopy(map, size, map[9]);
+		
+		// Strip off the map ID onwards
+		strcopy(map, StrContains(map, ".ugc") + 1, map);
+	}
 }
