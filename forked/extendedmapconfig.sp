@@ -29,7 +29,7 @@
 #include <sdktools>
 #include <tf2>
 
-#define VERSION                      "1.1.0"
+#define VERSION                      "1.2.0"
 
 public Plugin:myinfo = {
 	name        = "Extended Map Configs",
@@ -61,9 +61,11 @@ public OnPluginStart() {
 public OnAutoConfigsBuffered() {
     decl String:sMapName[128];
     GetCurrentMap(sMapName, sizeof(sMapName));
+    TrimWorkshopMapName(sMapName, sizeof(sMapName));
     
     ExecuteGlobalConfig();
     ExecuteGameTypeConfig(sMapName);
+    ExecuteMapPrefixConfigs(sMapName);
     ExecuteMapSpecificConfig(sMapName);
 }
 
@@ -216,5 +218,15 @@ SetupEMC() {
 		GenerateConfig(ConfigPath_GameType, "de", "Defuse maps");
 		GenerateConfig(ConfigPath_GameType, "as", "Assasination maps");
 		GenerateConfig(ConfigPath_GameType, "es", "Escape maps");
+	}
+}
+
+stock TrimWorkshopMapName(String:map[], size) {
+	if (StrContains(map, "workshop/", true) == 0) {
+		// Trim off workshop directory
+		strcopy(map, size, map[9]);
+		
+		// Strip off the map ID onwards
+		strcopy(map, StrContains(map, ".ugc") + 1, map);
 	}
 }
