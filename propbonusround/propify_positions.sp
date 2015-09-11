@@ -9,9 +9,11 @@
 #include <propify>
 #include <sdkhooks>
 
-#define PLUGIN_VERSION          "1.0.3"     // Plugin version.
+#define PLUGIN_VERSION          "1.1.0"     // Plugin version.
 
 #define VEC3_ROTATION_INDEX     3           // Starting index in the prop positions array for the rotation vector.
+
+#define DEGREES_PER_RADIAN 57.29577
 
 public Plugin:myinfo = {
     name = "[TF2] Propify! Positions",
@@ -24,7 +26,7 @@ public Plugin:myinfo = {
 new Handle:g_hPropPositions = INVALID_HANDLE, Handle:g_hPropPaths = INVALID_HANDLE;
 new bool:g_bIsPropifyLoaded;
 
-new Float:g_rgPropOffsetAngles[MAXPLAYERS+1][3];
+new Float:g_rgPropOffsetAngles[MAXPLAYERS+1][3], Float:g_rgPropOffsetPosition[MAXPLAYERS+1][3];
 
 public OnPluginStart() {
     g_hPropPositions = CreateArray(6);
@@ -86,12 +88,13 @@ public Propify_OnPropified(client, propIndex) {
             
             // Hook into prethink for client to update model rotation if it's a non-zero vector.
             if (GetVectorLength(g_rgPropOffsetAngles[client], true) > 0.0) {
+				GetArrayVector(g_hPropPositions, propOffsetIndex, g_rgPropOffsetPosition[client], 0);
                 SDKHook(client, SDKHook_PreThink, SDKHook_OnPreThink);
             }
         }
         
         CloseHandle(propPaths);
-    } else {
+    } else { // not a prop
         SetVariantVector3D(NULL_VECTOR);
         AcceptEntityInput(client, "SetCustomModelOffset");
     
@@ -101,10 +104,22 @@ public Propify_OnPropified(client, propIndex) {
 }
 
 public SDKHook_OnPreThink(client) {
-    new Float:angle[3];
+    new Float:angle[3], Float:origin[3];
     GetClientAbsAngles(client, angle);
-    
+	
     angle[1] += g_rgPropOffsetAngles[client][1];
+	
+	// TODO retrieve offset from prop_offsets { by-length, by-depth, by-height }
+	if (!Propify_IsClientPropLocked(client)) {
+		new Float:depth = g_rgPropOffsetPosition[client][1];
+		
+		// I forgot how to trig
+		origin[0] = -depth * Cosine(angle[1] / DEGREES_PER_RADIAN);
+		origin[1] = -depth * Sine(angle[1] / DEGREES_PER_RADIAN); // + offset1
+		origin[2] = g_rgPropOffsetPosition[client][2];
+		SetVariantVector3D(origin);
+		AcceptEntityInput(client, "SetCustomModelOffset");
+	}
     
     SetVariantVector3D(angle);
     AcceptEntityInput(client, "SetCustomModelRotation");

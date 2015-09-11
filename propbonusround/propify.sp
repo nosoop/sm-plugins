@@ -19,7 +19,7 @@
 #undef REQUIRE_PLUGIN
 #include <adminmenu>                        // Optional for adding the ability to force a random prop on a player via the admin menu.
 
-#define PLUGIN_VERSION          "3.6.1"     // Plugin version.  Am I doing semantic versioning right?
+#define PLUGIN_VERSION          "3.7.0"     // Plugin version.  Am I doing semantic versioning right?
 
 // Compile-time features:
 // #def PROP_TOGGLEHUD          1           // Toggle the HUD while propped with +reload.
@@ -148,6 +148,7 @@ public APLRes:AskPluginLoad2(Handle:hMySelf, bool:bLate, String:strError[], iMax
     CreateNative("Propify_PropPlayer", Native_PropPlayer);
     CreateNative("Propify_UnpropPlayer", Native_UnpropPlayer);
     CreateNative("Propify_IsClientProp", Native_IsClientProp);
+    CreateNative("Propify_IsClientPropLocked", Native_IsClientPropLocked);
     CreateNative("Propify_AddModelData", Native_AddModelData);
     CreateNative("Propify_RemoveModelData", Native_RemoveModelData);
     CreateNative("Propify_GetModelNamesArray", Native_GetModelNamesArray);
@@ -652,6 +653,11 @@ SetPropLockState(client, bool:bPropLocked) {
     g_bIsPropLocked[client] = bPropLocked;
 }
 
+public Native_IsClientPropLocked(Handle:plugin, nParams) {
+	new iClient = GetNativeCell(1);
+	return g_bIsPropLocked[iClient];
+}
+
 public Action:UnsetPropLockToggleDelay(Handle:timer, any:client) {
     // Clear lock on proplock settings.
     g_bRecentlySetPropLock[client] = false;
@@ -750,6 +756,7 @@ ProcessConfigFile() {
     // Push a read from the map-specific proplist.
     new String:mapName[64];
     GetCurrentMap(mapName, sizeof(mapName));
+	TrimWorkshopMapName(mapName, sizeof(mapName));
     PushArrayString(g_hIncludePropLists, mapName);
     
     // Run through all prop lists, importing new ones.
@@ -1185,4 +1192,14 @@ public Cvars_Changed(Handle:convar, const String:oldValue[], const String:newVal
     } else if(convar == g_hCPropSpeed) {
         g_iPropSpeed = StringToInt(newValue);
     }
+}
+
+stock TrimWorkshopMapName(String:map[], size) {
+	if (StrContains(map, "workshop/", true) == 0) {
+		// Trim off workshop directory
+		strcopy(map, size, map[9]);
+		
+		// Strip off the map ID onwards
+		strcopy(map, StrContains(map, ".ugc") + 1, map);
+	}
 }

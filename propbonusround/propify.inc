@@ -23,6 +23,7 @@ public __pl_propify_SetNTVOptional() {
     MarkNativeAsOptional("Propify_PropPlayer");
     MarkNativeAsOptional("Propify_UnropPlayer");
     MarkNativeAsOptional("Propify_IsClientProp");
+    MarkNativeAsOptional("Propify_IsClientPropLocked");
     MarkNativeAsOptional("Propify_SetThirdPersonOnProp");
     MarkNativeAsOptional("Propify_AddModelData");
     MarkNativeAsOptional("Propify_RemoveModelData");
@@ -138,6 +139,14 @@ native bool:Propify_UnpropPlayer(client, bool:respawn = false);
  * @return                  Boolean noting whether or not the client is a prop.
  */
 native bool:Propify_IsClientProp(client);
+
+/**
+ * Checks whether or not the specified client has locked their prop (i.e., cannot move or rotate)
+ *
+ * @return					True if client is a prop and locked, false if not a prop or if a prop and not locked.
+ * @error					If the client is not in-game or is invalid.
+ */
+native bool:Propify_IsClientPropLocked(iClient);
 
 /**
  * Adds a model to the prop list.
