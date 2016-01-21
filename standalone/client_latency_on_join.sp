@@ -9,20 +9,27 @@ public Plugin myinfo = {
 	url = "https://forums.alliedmods.net/showthread.php?p=2385158#post2385158"
 }
 
-// 100ms
-int nLatencyThreshold = 100;
+ConVar g_LatencyThreshold;
+
+public void OnPluginStart() {
+	g_LatencyThreshold = CreateConVar("sm_latency_threshold", "100",
+			"Maximum latency (in ms) before a player is kicked.", _,
+			true, 0.0);
+}
 
 public void OnClientPutInServer(int client) {
 	if (!IsFakeClient(client)) {
-		float flAvgLatency = GetClientAvgLatency(client, NetFlow_Outgoing);
+		int nLatencyMsecs = RoundFloat(GetClientAvgLatency(client, NetFlow_Outgoing) * 1000);
 		
-		int nLatencyMsecs = RoundFloat(flAvgLatency * 1000);
-		
-		if (nLatencyMsecs > nLatencyThreshold) {
-			LogMessage("Kicking client %N because of high ping (max %d, current %d)", client, nLatencyThreshold, nLatencyMsecs);
+		if (nLatencyMsecs > g_LatencyThreshold.IntValue) {
+			LogMessage("Kicking client %N because of high ping (max %d, current %d)",
+					client, g_LatencyThreshold.IntValue, nLatencyMsecs);
 			KickClient(client, "reasons");
 		} else {
-			// LogMessage("Allowing client %N to join (max %d, current %d)", client, nLatencyThreshold, nLatencyMsecs);
+			// LogMessage("Allowing client %N to join (max %d, current %d)", client, g_LatencyThreshold.IntValue, nLatencyMsecs);
 		}
 	}
 }
+
+// TODO sample player latency during game, if they are consistently below threshold then log accountid
+// also log IP address for whitelisting?
