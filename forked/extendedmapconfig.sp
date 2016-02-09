@@ -29,7 +29,7 @@
 #include <sdktools>
 #include <tf2>
 
-#define VERSION                      "1.2.0"
+#define VERSION                      "1.3.0"
 
 public Plugin:myinfo = {
 	name        = "Extended Map Configs",
@@ -44,11 +44,13 @@ public Plugin:myinfo = {
 #define MAPPATH_ROOT                    "mapconfig"
 #define MAPPATH_SUBDIR_GAMETYPE         "gametype"
 #define MAPPATH_SUBDIR_MAPS             "maps"
+#define MAPPATH_SUBDIR_WORKSHOP         "workshop"
 
 enum ConfigPathType {
     ConfigPath_Root = 0,
     ConfigPath_GameType,
-    ConfigPath_Maps
+    ConfigPath_Maps,
+	ConfigPath_Workshop
 };
 
 public OnPluginStart() {
@@ -61,12 +63,20 @@ public OnPluginStart() {
 public OnAutoConfigsBuffered() {
     decl String:sMapName[128];
     GetCurrentMap(sMapName, sizeof(sMapName));
+	FindMap(sMapName, sMapName, sizeof(sMapName));
+	
+	new workshop = GetWorkshopID(sMapName);
+	
     TrimWorkshopMapName(sMapName, sizeof(sMapName));
     
     ExecuteGlobalConfig();
     ExecuteGameTypeConfig(sMapName);
-    ExecuteMapPrefixConfigs(sMapName);
-    ExecuteMapSpecificConfig(sMapName);
+	ExecuteMapPrefixConfigs(sMapName);
+	ExecuteMapSpecificConfig(sMapName);
+	
+	if (workshop > 0) {
+		ExecuteWorkshopConfig(workshop);
+	}
 }
 
 ExecuteGlobalConfig() {
@@ -105,6 +115,10 @@ ExecuteMapSpecificConfig(const String:sMapName[]) {
     ExecuteConfig(ConfigPath_Maps, "%s.cfg", sMapName);
 }
 
+ExecuteWorkshopConfig(workshopid) {
+	ExecuteConfig(ConfigPath_Workshop, "%d.cfg", workshopid);
+}
+
 /**
  * Executes configurations for a map file, increasing in specifity.
  * (e.g., pl_pier_.cfg executes before pl_pier_b11_.cfg before pl_pier_b11_fix.cfg)
@@ -139,7 +153,9 @@ ExecuteConfig(ConfigPathType:type, const String:sConfigFormat[], any:...) {
     if (FileExists(sConfigFullPath, true)) {
         PrintToServer("[emc] Executing config file %s ...", sConfigPath);
         ServerCommand("exec %s", sConfigPath);
-    }
+    } else {
+		PrintToServer("[emc] Config file %s does not exist.", sConfigPath);
+	}
 }
 
 BuildConfigPath(ConfigPathType:type, String:buffer[], maxlength, const String:fmt[]="", any:...) {
@@ -156,6 +172,9 @@ BuildConfigPath(ConfigPathType:type, String:buffer[], maxlength, const String:fm
         case ConfigPath_Maps: {
             StrCat(buffer, maxlength, "/" ... MAPPATH_SUBDIR_MAPS);
         }
+		case ConfigPath_Workshop: {
+			StrCat(buffer, maxlength, "/" ... MAPPATH_SUBDIR_WORKSHOP);
+		}
     }
     Format(buffer, maxlength, "%s/%s", buffer, sConfigBase);
 }
@@ -201,6 +220,7 @@ SetupEMC() {
     GenerateConfigDirectory(ConfigPath_Root);
     GenerateConfigDirectory(ConfigPath_GameType);
     GenerateConfigDirectory(ConfigPath_Maps);
+    GenerateConfigDirectory(ConfigPath_Workshop);
 	
     GenerateConfig(ConfigPath_Root, "all", "All maps");
 
@@ -229,4 +249,8 @@ stock TrimWorkshopMapName(String:map[], size) {
 		// Strip off the map ID onwards
 		strcopy(map, StrContains(map, ".ugc") + 1, map);
 	}
+}
+
+stock _:GetWorkshopID(const String:map[]) {
+	return StringToInt(map[StrContains(map, ".ugc") + 4]);
 }
