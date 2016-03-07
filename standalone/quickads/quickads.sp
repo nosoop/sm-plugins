@@ -196,6 +196,8 @@ public CookieHandler_Advertisements(client, CookieMenuAction:action, any:info, S
 }
 
 public ConVarChanged_AdvertisementInterval(Handle:hCvar, const String:oldValue[], const String:newValue[]) {
-	KillTimer(g_hTimerAdvertisement);
+	if (g_hTimerAdvertisement != INVALID_HANDLE) {
+		KillTimer(g_hTimerAdvertisement);
+	}
 	g_hTimerAdvertisement = CreateTimer(GetConVarFloat(g_hCAdvertisementInterval), Timer_Advertisement, _, TIMER_REPEAT);
 }

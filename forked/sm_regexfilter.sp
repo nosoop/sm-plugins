@@ -181,6 +181,9 @@ public Action:OnChatMessage(&author, Handle:recipients, String:name[], String:me
 					
 					begin = 0;
 				}
+				
+				CloseHandle(dp);
+				CloseHandle(cregex);
 			}
 		}
 		begin++;
