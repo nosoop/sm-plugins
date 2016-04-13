@@ -7,7 +7,7 @@
 #include <sourcemod>
 #include <scp>
 
-#define PLUGIN_VERSION          "0.3.0"     // Plugin version.
+#define PLUGIN_VERSION          "0.3.1"     // Plugin version.
 
 public Plugin:myinfo = {
     name = "[TF2] Text Logger",
@@ -85,10 +85,12 @@ public Action:OnChatMessage(&author, Handle:recipients, String:name[], String:me
     new flags = GetMessageFlags();
     new bTeamMessage = flags & CHATFLAGS_TEAM == CHATFLAGS_TEAM;
     
-    Format(sTextMessage, sizeof(sTextMessage), "%s%N : %s", bTeamMessage ? "(TEAM) " : "", author, message);
+	if (!IsFakeClient(author)) {
+		Format(sTextMessage, sizeof(sTextMessage), "%s%N : %s", bTeamMessage ? "(TEAM) " : "", author, message);
 
-    TextLogToFile(0, sTextMessage);
-    CreateTimer(0.01, Timer_UnsetChatDelay, author);
+		TextLogToFile(0, sTextMessage);
+		CreateTimer(0.01, Timer_UnsetChatDelay, author);
+	}
     return Plugin_Continue;
 }
 
