@@ -16,3 +16,4 @@ I've stopped using this repository to hold all of my SourceMod projects, opting 
 
 * **Bot Map Overrides**:  Replaced by [nosoop/SM-TFBotMapRunner](https://github.com/nosoop/SM-TFBotMapRunner).
 * **Extended Map Configs** (fork):  Replaced by [nosoop/SM-YetAnotherMapConfigPlugin](https://github.com/nosoop/SM-YetAnotherMapConfigPlugin)
+* **AllChat** (SCP-compatible fork):  Practically obsoleted by my custom [Simple Chat Processor](https://git.csrd.science/nosoop/CSRD-SimpleChatProcessor) implementation, as well as the addition of `tf_gravetalk`.  It was a total kludge anyways; not worth using.
