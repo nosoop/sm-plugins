@@ -16,5 +16,7 @@ I've stopped using this repository to hold all of my SourceMod projects, opting 
 
 * **Bot Map Overrides**:  Replaced by my [Bot Map Runner](https://github.com/nosoop/SM-TFBotMapRunner) plugin.
 * **Extended Map Configs** (fork):  Replaced by my [Yet Another Map Config Plugin](https://github.com/nosoop/SM-YetAnotherMapConfigPlugin)
-* **AllChat** (SCP-compatible fork):  Practically obsoleted by my custom [Simple Chat Processor](https://git.csrd.science/nosoop/CSRD-SimpleChatProcessor) implementation, as well as the addition of `tf_gravetalk`.  It was a total kludge anyways; not worth using.
+* **AllChat** (SCP-compatible fork):  Practically obsoleted by my custom implementation of [Simple Chat Processor](https://git.csrd.science/nosoop/CSRD-SimpleChatProcessor), as well as the addition of `tf_gravetalk`.  It was a total kludge anyways; not worth using.
 * **Building Glow**:  Proof-of-concept was fully realized with my [Building Radar](https://github.com/nosoop/SM-TFBuildingRadar) plugin.
+* **Hitsounds for Buildings** (fork):  Obsoleted by a TF2 update that made it a built-in feature.
+* **Get Download Filter** library:  Replaced with a [function stock](https://github.com/nosoop/stocksoup/blob/master/download_filter_query.inc) that can be integrated standalone into a plugin.
