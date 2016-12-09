@@ -14,6 +14,7 @@ If you feel that my contibutions or new creations are valuable, feel free to don
 ## Migrated projects
 I've stopped using this repository to hold all of my SourceMod projects, opting to create individual plugin repositories instead.  If a new plugin has been put up that fulfills the purpose of one in this repository, the latter will be deleted and the replacements will be linked to below:
 
-* **Bot Map Overrides**:  Replaced by [nosoop/SM-TFBotMapRunner](https://github.com/nosoop/SM-TFBotMapRunner).
-* **Extended Map Configs** (fork):  Replaced by [nosoop/SM-YetAnotherMapConfigPlugin](https://github.com/nosoop/SM-YetAnotherMapConfigPlugin)
+* **Bot Map Overrides**:  Replaced by my [Bot Map Runner](https://github.com/nosoop/SM-TFBotMapRunner) plugin.
+* **Extended Map Configs** (fork):  Replaced by my [Yet Another Map Config Plugin](https://github.com/nosoop/SM-YetAnotherMapConfigPlugin)
 * **AllChat** (SCP-compatible fork):  Practically obsoleted by my custom [Simple Chat Processor](https://git.csrd.science/nosoop/CSRD-SimpleChatProcessor) implementation, as well as the addition of `tf_gravetalk`.  It was a total kludge anyways; not worth using.
+* **Building Glow**:  Proof-of-concept was fully realized with my [Building Radar](https://github.com/nosoop/SM-TFBuildingRadar) plugin.
