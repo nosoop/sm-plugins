@@ -20,3 +20,4 @@ I've stopped using this repository to hold all of my SourceMod projects, opting 
 * **Building Glow**:  Proof-of-concept was fully realized with my [Building Radar](https://github.com/nosoop/SM-TFBuildingRadar) plugin.
 * **Hitsounds for Buildings** (fork):  Obsoleted by a TF2 update that made it a built-in feature.
 * **Get Download Filter** library:  Replaced with a [function stock](https://github.com/nosoop/stocksoup/blob/master/download_filter_query.inc) that can be integrated standalone into a plugin.
+* **Round End Music**:  [I made a full revision of this system](http://git.csrd.science/nosoop/CSRD-RoundEndMusic), which has effectively been scrapped before release with a private streaming version.
